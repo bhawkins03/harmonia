@@ -47,7 +47,8 @@ internal sealed class AudioEngine : IDisposable
             capture = new WasapiLoopbackCapture(source);
             var input = capture.WaveFormat;
             int bytesPerSample = input.BitsPerSample / 8;
-            bool supported = input.Encoding == WaveFormatEncoding.IeeeFloat && input.BitsPerSample == 32
+            bool isFloat = input.Encoding == WaveFormatEncoding.IeeeFloat || (input is WaveFormatExtensible ext && ext.SubFormat == new Guid("00000003-0000-0010-8000-00AA00389B71"));
+            bool supported = isFloat && input.BitsPerSample == 32
                 || (input.Encoding == WaveFormatEncoding.Pcm || input.Encoding == WaveFormatEncoding.Extensible)
                    && (input.BitsPerSample == 16 || input.BitsPerSample == 24 || input.BitsPerSample == 32);
             if (input.Channels != 2 || !supported || input.BlockAlign != bytesPerSample * 2)
@@ -78,8 +79,8 @@ internal sealed class AudioEngine : IDisposable
                 for (int frame = 0; frame < frames; frame++)
                 {
                     int off = frame * input.BlockAlign;
-                    float l = ReadSample(e.Buffer, off, input);
-                    float r = ReadSample(e.Buffer, off + bytesPerSample, input);
+                    float l = ReadSample(e.Buffer, off, input, isFloat);
+                    float r = ReadSample(e.Buffer, off + bytesPerSample, input, isFloat);
                     float center = (l + r) * 0.5f;
                     lfeState += alpha * (center - lfeState);
                     float lfe = (float)lfeState * 0.5f;
@@ -116,9 +117,9 @@ internal sealed class AudioEngine : IDisposable
         catch { Stop(); throw; }
     }
 
-    private static float ReadSample(byte[] data, int offset, WaveFormat format)
+    private static float ReadSample(byte[] data, int offset, WaveFormat format, bool isFloat)
     {
-        if (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
+        if (isFloat && format.BitsPerSample == 32)
             return BitConverter.ToSingle(data, offset);
         return format.BitsPerSample switch
         {
