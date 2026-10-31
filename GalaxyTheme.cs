@@ -87,7 +87,8 @@ internal sealed class GalaxyDeviceTile : Control
         using var subtitleFont = new Font("Segoe UI", 8f);
         var label = deviceName.Length > 36 ? deviceName[..33] + "..." : deviceName;
         g.DrawString(label, textFont, Brushes.WhiteSmoke, 45, 8);
+        using var mutedBrush = new SolidBrush(GalaxyTheme.Muted);
         g.DrawString(AccessibleDescription ?? "Drag to assign", subtitleFont,
-            new SolidBrush(GalaxyTheme.Muted), new RectangleF(45, 29, Width - 56, 17));
+            mutedBrush, new RectangleF(45, 29, Width - 56, 17));
     }
 }
