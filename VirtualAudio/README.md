@@ -2,7 +2,7 @@
 
 This directory is reserved for the independent C++ WDK driver and native transport.
 
-Status: **design phase only**. No .sys, INF, device installer or signed virtual endpoint is included. See [implementation plan](../docs/VIRTUAL_DEVICE_IMPLEMENTATION.md).
+Status: **source preparation phase**. Pinned SysVAD preparation/build scripts and a native format profile are present. Compilation is blocked on native build tools. No .sys, INF, installer or functional endpoint is included. See [implementation sequence and build workflow](IMPLEMENTATION.md).
 
 The existing C# Harmonia application cannot itself register as a Windows playback device. A virtual endpoint must be installed through a Windows audio driver and deliver the actual PCM data to the user-mode routing engine.
 

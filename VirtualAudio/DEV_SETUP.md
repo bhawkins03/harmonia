@@ -1,5 +1,10 @@
 # Development setup for driver work
 
+For the pinned source preparation scripts, current toolchain requirements and
+build results, see [IMPLEMENTATION.md](IMPLEMENTATION.md). D0 compilation is
+currently blocked on missing native build tools. The historical outline below
+is supplemented by that reproducible workflow.
+
 The current Visual Studio/.NET Harmonia app is **not itself a driver**. SysVAD is C++ and uses the Windows Driver Kit (WDK).
 
 1. Install Visual Studio with Desktop development with C++ workload, matching Windows SDK and WDK (check WDK/Visual Studio compatibility for your installed versions).
@@ -14,4 +19,5 @@ The current Visual Studio/.NET Harmonia app is **not itself a driver**. SysVAD i
 Official build prerequisites and sample instructions:
 https://learn.microsoft.com/en-us/samples/microsoft/windows-driver-samples/sysvad-virtual-audio-device-driver-sample/
 
-This directory contains only driver design materials until actual kernel transport and packaging are implemented.
+This directory also contains pinned reference preparation/build scripts and a
+native format profile. Kernel transport and packaging remain unimplemented.

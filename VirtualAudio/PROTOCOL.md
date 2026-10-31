@@ -4,6 +4,10 @@ This is **a proposed ABI**, not a final or functioning kernel interface. It must
 
 ## Separation
 
+The initial prototype direction in [IMPLEMENTATION.md](IMPLEMENTATION.md) uses
+a driver-private ring with batched direct-I/O reads. The shared header below
+remains a draft requirements list, not an implemented mapped-memory ABI.
+
 - **Kernel render stream** produces PCM frames.
 - **User-mode Harmonia audio service** consumes.
 - **Control plane** negotiates capabilities, attaches session, reads counters, and signals stream state.
