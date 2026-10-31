@@ -301,7 +301,7 @@ internal sealed class MainForm : Form
         void Speaker(float x, float y, string text, int meterIndex)
         {
             g.DrawLine(thin, cx, cy, x, y);
-            var width = stereo ? 66f : 45f;
+            var width = 45f;
             var rect = new RectangleF(x - width / 2, y - 16, width, 32);
             using var bg = new SolidBrush(Color.FromArgb(39, 84, 122));
             using var border = new Pen(Color.FromArgb(80, 171, 245), 2);
