@@ -3,102 +3,142 @@ using NAudio.Wave;
 
 namespace Harmonia;
 
+internal enum SpeakerLayout { DualStereo, TripleStereoCenter, Surround51Beta }
+internal enum SpeakerRole { FrontLeft, FrontRight, Center, Subwoofer, RearStereo }
+
 internal sealed class AudioEngine : IDisposable
 {
     private readonly MMDeviceEnumerator enumerator = new();
+    private readonly List<(WasapiOut Output, BufferedWaveProvider Buffer, SpeakerRole Role)> sinks = new();
     private WasapiLoopbackCapture? capture;
-    private WasapiOut? leftOut, rightOut;
-    private BufferedWaveProvider? leftBuffer, rightBuffer;
     private readonly object gate = new();
+    private double lfeState;
 
     public bool IsRunning { get; private set; }
-
+    public string DefaultDeviceId => enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID;
     public (string Id, string Name)[] GetDevices() =>
         enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-                  .Select(d => (d.ID, d.FriendlyName)).ToArray();
+            .Select(d => (d.ID, d.FriendlyName)).ToArray();
 
-    public string DefaultDeviceId =>
-        enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID;
+    public static SpeakerRole[] Roles(SpeakerLayout layout) => layout switch
+    {
+        SpeakerLayout.DualStereo => [SpeakerRole.FrontLeft, SpeakerRole.FrontRight],
+        SpeakerLayout.TripleStereoCenter => [SpeakerRole.FrontLeft, SpeakerRole.FrontRight, SpeakerRole.Center],
+        _ => [SpeakerRole.FrontLeft, SpeakerRole.FrontRight, SpeakerRole.Center, SpeakerRole.Subwoofer, SpeakerRole.RearStereo]
+    };
 
-    public void Start(string leftId, string rightId)
+    public void Start(SpeakerLayout layout, IReadOnlyDictionary<SpeakerRole, string> assignments)
     {
         if (IsRunning) return;
-        if (leftId == rightId) throw new ArgumentException("Select two different monitors.");
+        var required = Roles(layout).Where(r => r != SpeakerRole.Subwoofer).ToArray();
+        foreach (var role in required)
+            if (!assignments.TryGetValue(role, out var id) || string.IsNullOrWhiteSpace(id))
+                throw new ArgumentException($"Assign a playback device for {role}.");
         using var source = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        if (source.ID == leftId || source.ID == rightId)
-            throw new ArgumentException("Monitor outputs cannot be the current Windows default audio device. This prevents feedback.");
+        var selected = Roles(layout).Where(assignments.ContainsKey).ToArray();
+        var ids = selected.Select(r => assignments[r]).ToArray();
+        if (ids.Distinct(StringComparer.OrdinalIgnoreCase).Count() != ids.Length)
+            throw new ArgumentException("Each speaker endpoint must be a different Windows playback device.");
+        if (ids.Contains(source.ID))
+            throw new ArgumentException("A selected output is the default Windows capture device; this risks audio feedback.");
 
         try
         {
-            using var left = enumerator.GetDevice(leftId);
-            using var right = enumerator.GetDevice(rightId);
             capture = new WasapiLoopbackCapture(source);
-            var format = capture.WaveFormat;
-            int bps = format.BitsPerSample / 8;
-            bool supported = format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32
-                || (format.Encoding == WaveFormatEncoding.Pcm || format.Encoding == WaveFormatEncoding.Extensible)
-                   && (format.BitsPerSample == 16 || format.BitsPerSample == 24 || format.BitsPerSample == 32);
-            if (format.Channels != 2 || !supported || format.BlockAlign != 2 * bps)
-                throw new NotSupportedException($"Unsupported source format: {format}. Requires stereo PCM or 32-bit float.");
-
-            leftBuffer = new BufferedWaveProvider(format) { BufferDuration = TimeSpan.FromMilliseconds(650), ReadFully = true, DiscardOnBufferOverflow = true };
-            rightBuffer = new BufferedWaveProvider(format) { BufferDuration = TimeSpan.FromMilliseconds(650), ReadFully = true, DiscardOnBufferOverflow = true };
-            leftOut = new WasapiOut(left, AudioClientShareMode.Shared, true, 100);
-            rightOut = new WasapiOut(right, AudioClientShareMode.Shared, true, 100);
-            leftOut.Init(leftBuffer);
-            rightOut.Init(rightBuffer);
-
-            capture.DataAvailable += (_, args) =>
+            var input = capture.WaveFormat;
+            int bytesPerSample = input.BitsPerSample / 8;
+            bool isFloat = input.Encoding == WaveFormatEncoding.IeeeFloat || (input is WaveFormatExtensible ext && ext.SubFormat == new Guid("00000003-0000-0010-8000-00AA00389B71"));
+            bool supported = isFloat && input.BitsPerSample == 32
+                || (input.Encoding == WaveFormatEncoding.Pcm || input.Encoding == WaveFormatEncoding.Extensible)
+                   && (input.BitsPerSample == 16 || input.BitsPerSample == 24 || input.BitsPerSample == 32);
+            if (input.Channels != 2 || !supported || input.BlockAlign != bytesPerSample * 2)
+                throw new NotSupportedException($"Only stereo PCM and 32-bit float sources are supported: {input}.");
+            var outputFormat = WaveFormat.CreateIeeeFloatWaveFormat(input.SampleRate, 2);
+            foreach (var role in selected)
             {
-                int len = args.BytesRecorded / format.BlockAlign * format.BlockAlign;
-                if (len == 0) return;
-                var l = new byte[len];
-                var r = new byte[len];
-                for (int off = 0; off < len; off += format.BlockAlign)
+                using var device = enumerator.GetDevice(assignments[role]);
+                var buffer = new BufferedWaveProvider(outputFormat)
                 {
-                    Buffer.BlockCopy(args.Buffer, off, l, off, bps);
-                    Buffer.BlockCopy(args.Buffer, off, l, off + bps, bps);
-                    Buffer.BlockCopy(args.Buffer, off + bps, r, off, bps);
-                    Buffer.BlockCopy(args.Buffer, off + bps, r, off + bps, bps);
+                    BufferDuration = TimeSpan.FromMilliseconds(650),
+                    DiscardOnBufferOverflow = true,
+                    ReadFully = true
+                };
+                var output = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
+                output.Init(buffer);
+                sinks.Add((output, buffer, role));
+            }
+
+            lfeState = 0;
+            double alpha = 1 - Math.Exp(-2 * Math.PI * 120 / input.SampleRate);
+            capture.DataAvailable += (_, e) =>
+            {
+                int frames = e.BytesRecorded / input.BlockAlign;
+                if (frames == 0) return;
+                var buffers = new Dictionary<SpeakerRole, byte[]>();
+                foreach (var sink in sinks) buffers[sink.Role] = new byte[frames * 8];
+                for (int frame = 0; frame < frames; frame++)
+                {
+                    int off = frame * input.BlockAlign;
+                    float l = ReadSample(e.Buffer, off, input, isFloat);
+                    float r = ReadSample(e.Buffer, off + bytesPerSample, input, isFloat);
+                    float center = (l + r) * 0.5f;
+                    lfeState += alpha * (center - lfeState);
+                    float lfe = (float)lfeState * 0.5f;
+                    float rearL = (l - r) * 0.5f;
+                    float rearR = (r - l) * 0.5f;
+                    foreach (var (role, buffer) in buffers)
+                    {
+                        (float a, float b) = role switch
+                        {
+                            SpeakerRole.FrontLeft => (l, l),
+                            SpeakerRole.FrontRight => (r, r),
+                            SpeakerRole.Center => (center, center),
+                            SpeakerRole.Subwoofer => (lfe, lfe),
+                            SpeakerRole.RearStereo => (rearL, rearR),
+                            _ => (0, 0)
+                        };
+                        Buffer.BlockCopy(BitConverter.GetBytes(Math.Clamp(a, -1f, 1f)), 0, buffer, frame * 8, 4);
+                        Buffer.BlockCopy(BitConverter.GetBytes(Math.Clamp(b, -1f, 1f)), 0, buffer, frame * 8 + 4, 4);
+                    }
                 }
                 lock (gate)
                 {
-                    if (leftBuffer.BufferedDuration.TotalMilliseconds > 350) leftBuffer.ClearBuffer();
-                    if (rightBuffer.BufferedDuration.TotalMilliseconds > 350) rightBuffer.ClearBuffer();
-                    leftBuffer.AddSamples(l, 0, len);
-                    rightBuffer.AddSamples(r, 0, len);
+                    foreach (var sink in sinks)
+                    {
+                        if (sink.Buffer.BufferedDuration.TotalMilliseconds > 350) sink.Buffer.ClearBuffer();
+                        sink.Buffer.AddSamples(buffers[sink.Role], 0, buffers[sink.Role].Length);
+                    }
                 }
             };
-
-            leftOut.Play();
-            rightOut.Play();
+            foreach (var sink in sinks) sink.Output.Play();
             capture.StartRecording();
             IsRunning = true;
         }
-        catch
+        catch { Stop(); throw; }
+    }
+
+    private static float ReadSample(byte[] data, int offset, WaveFormat format, bool isFloat)
+    {
+        if (isFloat && format.BitsPerSample == 32)
+            return BitConverter.ToSingle(data, offset);
+        return format.BitsPerSample switch
         {
-            Stop();
-            throw;
-        }
+            16 => BitConverter.ToInt16(data, offset) / 32768f,
+            24 => ((data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16) << 8 >> 8) / 8388608f,
+            32 => BitConverter.ToInt32(data, offset) / 2147483648f,
+            _ => 0
+        };
     }
 
     public void Stop()
     {
         IsRunning = false;
         try { capture?.StopRecording(); } catch { }
-        try { leftOut?.Stop(); } catch { }
-        try { rightOut?.Stop(); } catch { }
+        foreach (var s in sinks) { try { s.Output.Stop(); } catch { } s.Output.Dispose(); }
+        sinks.Clear();
         capture?.Dispose();
-        leftOut?.Dispose();
-        rightOut?.Dispose();
         capture = null;
-        leftOut = rightOut = null;
-        leftBuffer = rightBuffer = null;
     }
 
-    public void Dispose()
-    {
-        Stop();
-        enumerator.Dispose();
-    }
+    public void Dispose() { Stop(); enumerator.Dispose(); }
 }
