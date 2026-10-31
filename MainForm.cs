@@ -7,6 +7,20 @@ namespace Harmonia;
 
 internal sealed class MainForm : Form
 {
+    // Enables double buffering for continuously updated speaker meters.
+    private sealed class BufferedMapPanel : Panel
+    {
+        public BufferedMapPanel()
+        {
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
+            UpdateStyles();
+        }
+    }
+
     private sealed record DeviceChoice(string Id, string Name)
     {
         public override string ToString() => Name;
@@ -23,7 +37,7 @@ internal sealed class MainForm : Form
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TableLayoutPanel assignmentsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
     private readonly Dictionary<SpeakerRole, ComboBox> selectors = new();
-    private readonly Panel map = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 29, 42) };
+    private readonly BufferedMapPanel map = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 29, 42) };
     private readonly Label status = new() { Text = "Stopped", AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Button start = new() { Text = "Start routing", Width = 130, Height = 34 };
     private readonly Button stop = new() { Text = "Stop routing", Width = 130, Height = 34, Enabled = false };
