@@ -255,8 +255,8 @@ internal sealed class MainForm : Form
             var rect = new RectangleF(x - width / 2, y - 16, width, 32);
             using var bg = new SolidBrush(Color.FromArgb(39, 84, 122));
             using var border = new Pen(Color.FromArgb(80, 171, 245), 2);
-            g.FillRoundedRectangle(bg, rect, 6);
-            g.DrawRoundedRectangle(border, rect, 6);
+            g.FillRectangle(bg, rect);
+            g.DrawRectangle(border, rect.X, rect.Y, rect.Width, rect.Height);
             g.FillEllipse(speakerBrush, x - 5, y - 5, 10, 10);
             var label = g.MeasureString(text, labelFont);
             g.DrawString(text, labelFont, Brushes.Gainsboro, x - label.Width / 2, y + 19);
