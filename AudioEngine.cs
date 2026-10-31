@@ -28,7 +28,7 @@ internal sealed class AudioEngine : IDisposable
         _ => [SpeakerRole.FrontLeft, SpeakerRole.FrontRight, SpeakerRole.Center, SpeakerRole.Subwoofer, SpeakerRole.RearStereo]
     };
 
-    public void Start(SpeakerLayout layout, IReadOnlyDictionary<SpeakerRole, string> assignments)
+    public void Start(SpeakerLayout layout, IReadOnlyDictionary<SpeakerRole, string> assignments, bool strictInput = false)
     {
         if (IsRunning) return;
         var required = Roles(layout).Where(r => r != SpeakerRole.Subwoofer).ToArray();
@@ -54,7 +54,7 @@ internal sealed class AudioEngine : IDisposable
                    && (input.BitsPerSample == 16 || input.BitsPerSample == 24 || input.BitsPerSample == 32);
             if ((input.Channels != 2 && input.Channels != 6) || !supported || input.BlockAlign != bytesPerSample * input.Channels)
                 throw new NotSupportedException($"Only 2-channel or 6-channel PCM/float capture is supported: {input}.");
-            InputFormatDescription = input.Channels == 6 ? $"Native 5.1 PCM ({input.SampleRate} Hz)" : $"Stereo input • synthesized surround ({input.SampleRate} Hz)";
+            InputFormatDescription = input.Channels == 6 ? $"Native 5.1 PCM ({input.SampleRate} Hz)" : strictInput ? $"Stereo input • no surround upmix ({input.SampleRate} Hz)" : $"Stereo input • synthesized surround ({input.SampleRate} Hz)";
             var outputFormat = WaveFormat.CreateIeeeFloatWaveFormat(input.SampleRate, 2);
             foreach (var role in selected)
             {
@@ -86,11 +86,11 @@ internal sealed class AudioEngine : IDisposable
                     bool discrete = input.Channels == 6;
                     // Standard WAVEFORMATEXTENSIBLE 5.1 mapping: FL FR FC LFE BL BR,
                     // or FL FR FC LFE SL SR. Both have the same interleaved indices.
-                    float center = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 2, input, isFloat) : (l + r) * 0.5f;
+                    float center = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 2, input, isFloat) : strictInput ? 0 : (l + r) * 0.5f;
                     lfeState += alpha * (center - lfeState);
-                    float lfe = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 3, input, isFloat) : (float)lfeState * 0.5f;
-                    float rearL = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 4, input, isFloat) : (l - r) * 0.5f;
-                    float rearR = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 5, input, isFloat) : (r - l) * 0.5f;
+                    float lfe = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 3, input, isFloat) : strictInput ? 0 : (float)lfeState * 0.5f;
+                    float rearL = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 4, input, isFloat) : strictInput ? 0 : (l - r) * 0.5f;
+                    float rearR = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 5, input, isFloat) : strictInput ? 0 : (r - l) * 0.5f;
                     foreach (var (role, buffer) in buffers)
                     {
                         (float a, float b) = role switch
