@@ -36,7 +36,11 @@ internal sealed class MainForm : Form
     private readonly float[] displayLevels = new float[6];
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TableLayoutPanel assignmentsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
-    private readonly Dictionary<SpeakerRole, ComboBox> selectors = new();
+    private readonly Dictionary<SpeakerRole, string> mappedDevices = new();
+    private readonly Dictionary<string, string> deviceNames = new();
+    private readonly FlowLayoutPanel deviceTiles = new() { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = true, FlowDirection = FlowDirection.TopDown };
+    private readonly Dictionary<SpeakerRole, RectangleF> dropTargets = new();
+    private SpeakerRole? hoveringRole;
     private readonly BufferedMapPanel map = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 29, 42) };
     private readonly Label status = new() { Text = "Stopped", AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Button start = new() { Text = "Start routing", Width = 130, Height = 34 };
@@ -95,9 +99,9 @@ internal sealed class MainForm : Form
         };
         options.Controls.Add(note, 0, 2);
         options.Controls.Add(new Label { Text = "ASSIGN OUTPUT DEVICES", ForeColor = Color.LightSkyBlue, AutoSize = true, Padding = new Padding(0, 12, 0, 7) }, 0, 3);
-        assignmentsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
-        assignmentsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        options.Controls.Add(assignmentsPanel, 0, 4);
+        var tilesGroup = new GroupBox { Text = "Available audio devices — drag onto map", ForeColor = Color.Gainsboro, Height = 220, Dock = DockStyle.Top };
+        tilesGroup.Controls.Add(deviceTiles);
+        options.Controls.Add(tilesGroup, 0, 4);
         options.RowCount = 6;
         options.Controls.Add(strictInput, 0, 5);
         leftSide.Controls.Add(options);
@@ -137,6 +141,29 @@ internal sealed class MainForm : Form
         testRearL.Click += async (_, _) => await TestRearAsync(true);
         testRearR.Click += async (_, _) => await TestRearAsync(false);
         map.Paint += DrawSpeakerMap;
+        map.AllowDrop = true;
+        map.DragEnter += (_, e) => { if (!audio.IsRunning && e.Data?.GetDataPresent(typeof(string)) == true) e.Effect = DragDropEffects.Move; };
+        map.DragOver += (_, e) =>
+        {
+            var point = map.PointToClient(new Point(e.X, e.Y));
+            hoveringRole = HitTestRole(point);
+            e.Effect = !audio.IsRunning && hoveringRole.HasValue && e.Data?.GetDataPresent(typeof(string)) == true
+                ? DragDropEffects.Move : DragDropEffects.None;
+            map.Invalidate();
+        };
+        map.DragLeave += (_, _) => { hoveringRole = null; map.Invalidate(); };
+        map.DragDrop += (_, e) =>
+        {
+            var role = HitTestRole(map.PointToClient(new Point(e.X, e.Y)));
+            hoveringRole = null;
+            if (audio.IsRunning || role is null || e.Data?.GetData(typeof(string)) is not string id) return;
+            if (!deviceNames.ContainsKey(id)) return;
+            // One physical endpoint per role. The rear pair uses one stereo endpoint.
+            foreach (var assigned in mappedDevices.Where(x => x.Value == id).Select(x => x.Key).ToArray()) mappedDevices.Remove(assigned);
+            mappedDevices[role.Value] = id;
+            SaveSelection();
+            map.Invalidate();
+        };
         meterTimer.Tick += (_, _) =>
         {
             var peaks = audio.GetSignalPeaks();
@@ -161,27 +188,20 @@ internal sealed class MainForm : Form
     {
         if (loading) return;
         settings.Layout = CurrentLayout;
-        var key = CurrentLayout.ToString();
-        var saved = settings.Assignments.TryGetValue(key, out var old) ? old : new Dictionary<string, string>();
-        foreach (var (role, combo) in selectors)
-        {
-            if (combo.SelectedItem is DeviceChoice device) saved[role.ToString()] = device.Id;
-            else saved.Remove(role.ToString());
-        }
-        settings.Assignments[key] = saved;
+        settings.Assignments[CurrentLayout.ToString()] = mappedDevices.ToDictionary(x => x.Key.ToString(), x => x.Value);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
             File.WriteAllText(configPath, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch { /* Preferences are optional. Never touch Windows device settings. */ }
+        catch { }
     }
 
     private void BuildSelectors()
     {
         if (audio.IsRunning)
         {
-            MessageBox.Show("Stop routing before changing the speaker layout or refreshing devices.", "Harmonia");
+            MessageBox.Show("Stop routing before changing the layout.", "Harmonia");
             loading = true;
             layout.SelectedIndex = (int)settings.Layout;
             loading = false;
@@ -190,40 +210,50 @@ internal sealed class MainForm : Form
         loading = true;
         try
         {
+            deviceNames.Clear();
+            deviceTiles.Controls.Clear();
             var defaultId = audio.DefaultDeviceId;
-            var devices = audio.GetDevices()
-                .Select(x => new DeviceChoice(x.Id, x.Name + (x.Id == defaultId ? " [Windows default — capture source]" : ""))).ToArray();
-            assignmentsPanel.SuspendLayout();
-            assignmentsPanel.Controls.Clear();
-            assignmentsPanel.RowStyles.Clear();
-            selectors.Clear();
-            var saved = settings.Assignments.TryGetValue(CurrentLayout.ToString(), out var p) ? p : new Dictionary<string, string>();
-            var roles = AudioEngine.Roles(CurrentLayout);
-            assignmentsPanel.RowCount = roles.Length;
-            for (int i = 0; i < roles.Length; i++)
+            foreach (var device in audio.GetDevices())
             {
-                var role = roles[i];
-                assignmentsPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
-                var label = new Label { Text = RoleName(role), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.Gainsboro };
-                var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(4, 10, 4, 6) };
-                if (role == SpeakerRole.Subwoofer) combo.Items.Add(new DeviceChoice("", "(None — optional)"));
-                combo.Items.AddRange(devices);
-                string? remembered = saved.GetValueOrDefault(role.ToString());
-                combo.SelectedItem = combo.Items.Cast<DeviceChoice>().FirstOrDefault(x => x.Id == remembered);
-                if (combo.SelectedIndex < 0 && (role == SpeakerRole.Subwoofer || CurrentLayout != SpeakerLayout.DualStereo))
-                    combo.SelectedIndex = role == SpeakerRole.Subwoofer ? 0 : -1;
-                else if (combo.SelectedIndex < 0 && i < devices.Length)
-                    combo.SelectedItem = devices[i];
-                combo.SelectedIndexChanged += (_, _) => SaveSelection();
-                selectors[role] = combo;
-                assignmentsPanel.Controls.Add(label, 0, i);
-                assignmentsPanel.Controls.Add(combo, 1, i);
+                deviceNames[device.Id] = device.Name;
+                var tile = new Label
+                {
+                    Text = device.Name + (device.Id == defaultId ? " (source)" : ""),
+                    Tag = device.Id,
+                    Width = 295,
+                    Height = 43,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    BackColor = Color.FromArgb(39, 64, 94),
+                    ForeColor = Color.WhiteSmoke,
+                    Padding = new Padding(8),
+                    Cursor = Cursors.Hand
+                };
+                tile.MouseDown += (_, e) =>
+                {
+                    if (e.Button == MouseButtons.Left && !audio.IsRunning)
+                        tile.DoDragDrop((string)tile.Tag!, DragDropEffects.Move);
+                };
+                deviceTiles.Controls.Add(tile);
             }
-            assignmentsPanel.ResumeLayout();
+            mappedDevices.Clear();
+            if (settings.Assignments.TryGetValue(CurrentLayout.ToString(), out var saved))
+                foreach (var entry in saved)
+                    if (Enum.TryParse<SpeakerRole>(entry.Key, out var role) &&
+                        AudioEngine.Roles(CurrentLayout).Contains(role) &&
+                        deviceNames.ContainsKey(entry.Value))
+                        mappedDevices[role] = entry.Value;
             map.Invalidate();
         }
         catch (Exception ex) { status.Text = "Device discovery failed"; MessageBox.Show(ex.Message, "Harmonia"); }
         finally { loading = false; }
+    }
+
+    private SpeakerRole? HitTestRole(Point location)
+    {
+        foreach (var entry in dropTargets)
+            if (entry.Value.Contains(location)) return entry.Key;
+        return null;
     }
 
     private static string RoleName(SpeakerRole role) => role switch
@@ -254,10 +284,7 @@ internal sealed class MainForm : Form
 
     private void StartRouting()
     {
-        var selected = new Dictionary<SpeakerRole, string>();
-        foreach (var (role, combo) in selectors)
-            if (combo.SelectedItem is DeviceChoice device && !string.IsNullOrWhiteSpace(device.Id))
-                selected[role] = device.Id;
+        var selected = new Dictionary<SpeakerRole, string>(mappedDevices);
         try
         {
             audio.Start(CurrentLayout, selected, strictInput.Checked);
@@ -268,7 +295,7 @@ internal sealed class MainForm : Form
             refresh.Enabled = false;
             layout.Enabled = false;
             strictInput.Enabled = false;
-            foreach (var combo in selectors.Values) combo.Enabled = false;
+            deviceTiles.Enabled = false;
         }
         catch (Exception ex)
         {
@@ -280,11 +307,10 @@ internal sealed class MainForm : Form
     private async Task TestRearAsync(bool leftChannel)
     {
         if (audio.IsRunning) { MessageBox.Show("Stop routing before testing a speaker.", "Harmonia"); return; }
-        if (!selectors.TryGetValue(SpeakerRole.RearStereo, out var selector) ||
-            selector.SelectedItem is not DeviceChoice device || string.IsNullOrWhiteSpace(device.Id))
+        if (!mappedDevices.TryGetValue(SpeakerRole.RearStereo, out var rearDeviceId))
         { MessageBox.Show("Choose Surround 5.1 and assign your rear stereo headphones first.", "Harmonia"); return; }
         testRearL.Enabled = testRearR.Enabled = false;
-        try { await SpeakerDiagnostics.PlayToneAsync(device.Id, leftChannel, !leftChannel); }
+        try { await SpeakerDiagnostics.PlayToneAsync(rearDeviceId, leftChannel, !leftChannel); }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Speaker test failed"); }
         finally { testRearL.Enabled = testRearR.Enabled = true; }
     }
@@ -298,7 +324,7 @@ internal sealed class MainForm : Form
         refresh.Enabled = true;
         layout.Enabled = true;
         strictInput.Enabled = true;
-        foreach (var combo in selectors.Values) combo.Enabled = true;
+        deviceTiles.Enabled = true;
     }
 
     private void DrawSpeakerMap(object? sender, PaintEventArgs e)
@@ -313,7 +339,8 @@ internal sealed class MainForm : Form
         using var ring = new Pen(Color.FromArgb(47, 150, 174, 205), 1.5f);
         using var speakerBrush = new SolidBrush(Color.FromArgb(58, 145, 230));
         using var listenerBrush = new SolidBrush(Color.FromArgb(227, 235, 246));
-        g.DrawString("TOP-DOWN SPEAKER MAP", titleFont, Brushes.WhiteSmoke, 20, 14);
+        g.DrawString("TOP-DOWN SPEAKER MAP — DRAG TO ASSIGN", titleFont, Brushes.WhiteSmoke, 20, 14);
+        dropTargets.Clear();
         float cx = w / 2, cy = h / 2 + 18;
         float rx = Math.Min(w * .38f, 180), ry = Math.Min(h * .34f, 165);
         g.DrawEllipse(ring, cx - rx, cy - ry, rx * 2, ry * 2);
@@ -331,30 +358,36 @@ internal sealed class MainForm : Form
             }
         }
 
-        void Speaker(float x, float y, string text, int meterIndex)
+        void Speaker(float x, float y, string text, int meterIndex, SpeakerRole role)
         {
             g.DrawLine(thin, cx, cy, x, y);
             var width = 45f;
             var rect = new RectangleF(x - width / 2, y - 16, width, 32);
+            dropTargets[role] = new RectangleF(x - 41, y - 36, 82, 78);
             using var bg = new SolidBrush(Color.FromArgb(39, 84, 122));
-            using var border = new Pen(Color.FromArgb(80, 171, 245), 2);
+            using var border = new Pen(hoveringRole == role ? Color.Gold : mappedDevices.ContainsKey(role) ? Color.LimeGreen : Color.FromArgb(80, 171, 245), 2);
             g.FillRectangle(bg, rect);
             g.DrawRectangle(border, rect.X, rect.Y, rect.Width, rect.Height);
             g.FillEllipse(speakerBrush, x - 5, y - 5, 10, 10);
             Meter(x, y - 10, displayLevels[meterIndex]);
             var label = g.MeasureString(text, labelFont);
             g.DrawString(text, labelFont, Brushes.Gainsboro, x - label.Width / 2, y + 19);
+            string assigned = mappedDevices.TryGetValue(role, out var deviceId) && deviceNames.TryGetValue(deviceId, out var name)
+                ? name : "Drop device here";
+            if (assigned.Length > 22) assigned = assigned[..19] + "...";
+            var nameWidth = g.MeasureString(assigned, labelFont).Width;
+            g.DrawString(assigned, labelFont, Brushes.LightSkyBlue, x - nameWidth / 2, y + 34);
         }
 
-        Speaker(cx - rx * .80f, cy - ry * .75f, "L", 0);
-        Speaker(cx + rx * .80f, cy - ry * .75f, "R", 1);
+        Speaker(cx - rx * .80f, cy - ry * .75f, "L", 0, SpeakerRole.FrontLeft);
+        Speaker(cx + rx * .80f, cy - ry * .75f, "R", 1, SpeakerRole.FrontRight);
         if (CurrentLayout != SpeakerLayout.DualStereo)
-            Speaker(cx, cy - ry, "Center", 2);
+            Speaker(cx, cy - ry, "Center", 2, SpeakerRole.Center);
         if (CurrentLayout == SpeakerLayout.Surround51Beta)
         {
-            Speaker(cx - rx * .69f, cy + ry * .82f, "Rear L", 4);
-            Speaker(cx + rx * .69f, cy + ry * .82f, "Rear R", 5);
-            Speaker(cx + rx * 1.02f, cy - ry * .12f, "LFE", 3);
+            Speaker(cx - rx * .69f, cy + ry * .82f, "Rear L", 4, SpeakerRole.RearStereo);
+            Speaker(cx + rx * .69f, cy + ry * .82f, "Rear R", 5, SpeakerRole.RearStereo);
+            Speaker(cx + rx * 1.02f, cy - ry * .12f, "LFE", 3, SpeakerRole.Subwoofer);
         }
         g.FillEllipse(listenerBrush, cx - 12, cy - 15, 24, 24);
         using var body = new Pen(listenerBrush, 5) { StartCap = LineCap.Round, EndCap = LineCap.Round };
