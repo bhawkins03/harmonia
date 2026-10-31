@@ -48,3 +48,30 @@ C# / .NET 8 / NAudio 2.2.1, with WASAPI loopback capture and two independent sha
 - The prototype has not been compiled or validated against actual hardware here.
 
 See [ROADMAP.md](ROADMAP.md) for development priorities and [CONTRIBUTING.md](CONTRIBUTING.md) for contributions.
+
+## Speaker layouts (experimental feature branch)
+
+The `feature/speaker-layouts` branch introduces a graphical speaker-layout selector and a top-down listener-centered display, rendered with native Windows drawing primitives.
+
+| Layout | Playback endpoints | Routing |
+| --- | --- | --- |
+| Dual monitor (stereo) | Front left + front right | Left channel on left monitor's two speakers; right channel on right monitor's two speakers |
+| Triple monitor (stereo + center) | Front left + front right + center | Left and right as above, center gets (L+R)/2 |
+| (Beta) Surround 5.1 | Front left, front right, center, one stereo rear device; optional separate LFE | Center=(L+R)/2; rear stereo=(L-R)/2 and (R-L)/2; LFE is a simple low-pass mono approximation |
+
+**Important:** This is a stereo-to-surround experiment, NOT native/discrete 5.1 decoding, and is not calibrated. It may sound odd with mono audio, which cancels in the difference-derived rear speakers. The rear device gets two distinct channels on a single stereo playback endpoint. The subwoofer endpoint is optional and requires its own dedicated Windows playback device. If absent, this is effectively a 5.0 output layout, despite the beta selector label.
+
+Each selected playback endpoint must be distinct, and none may be the current Windows default playback device; the default source continues playing normally.
+
+To test before merging the branch:
+
+```cmd
+git fetch origin
+git switch feature/speaker-layouts
+dotnet restore
+dotnet run
+```
+
+The UI includes a simplified, schematic speaker-position map (not a distance-calibrated room model). It uses custom GDI+ vector shapes requiring no third-party asset licenses. Real device synchronization, safe multichannel DSP, speaker calibration, and polished iconography remain future work.
+
+The code is experimental and has not been compiled on a Windows machine in this environment.
