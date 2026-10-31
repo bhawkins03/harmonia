@@ -26,6 +26,8 @@ internal sealed class MainForm : Form
     private readonly Button start = new() { Text = "Start routing", Width = 130, Height = 34 };
     private readonly Button stop = new() { Text = "Stop routing", Width = 130, Height = 34, Enabled = false };
     private readonly Button refresh = new() { Text = "Refresh devices", Width = 130, Height = 34 };
+    private readonly Button testRearL = new() { Text = "Test rear L", Width = 105, Height = 34 };
+    private readonly Button testRearR = new() { Text = "Test rear R", Width = 105, Height = 34 };
     private readonly NotifyIcon tray;
     private readonly Settings settings;
     private bool exiting;
@@ -88,6 +90,8 @@ internal sealed class MainForm : Form
         footer.Controls.Add(start);
         footer.Controls.Add(stop);
         footer.Controls.Add(refresh);
+        footer.Controls.Add(testRearL);
+        footer.Controls.Add(testRearR);
         var statusLabel = new Label { Text = "Status:", AutoSize = true, Padding = new Padding(15, 8, 0, 0) };
         footer.Controls.Add(statusLabel);
         status.Padding = new Padding(0, 8, 0, 0);
@@ -108,6 +112,8 @@ internal sealed class MainForm : Form
         start.Click += (_, _) => StartRouting();
         stop.Click += (_, _) => StopRouting();
         refresh.Click += (_, _) => BuildSelectors();
+        testRearL.Click += async (_, _) => await TestRearAsync(true);
+        testRearR.Click += async (_, _) => await TestRearAsync(false);
         map.Paint += DrawSpeakerMap;
         loading = true;
         layout.SelectedIndex = (int)settings.Layout;
@@ -222,6 +228,18 @@ internal sealed class MainForm : Form
             status.Text = "Unable to start";
             MessageBox.Show(ex.Message + "\n\nIf your headphones are the default Windows audio device, they appear in the list but cannot be used as an output with the current endpoint-loopback engine. Avoid feedback by selecting a separate capture endpoint or wait for process-exclusion capture support.", "Harmonia", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private async Task TestRearAsync(bool leftChannel)
+    {
+        if (audio.IsRunning) { MessageBox.Show("Stop routing before testing a speaker.", "Harmonia"); return; }
+        if (!selectors.TryGetValue(SpeakerRole.RearStereo, out var selector) ||
+            selector.SelectedItem is not DeviceChoice device || string.IsNullOrWhiteSpace(device.Id))
+        { MessageBox.Show("Choose Surround 5.1 and assign your rear stereo headphones first.", "Harmonia"); return; }
+        testRearL.Enabled = testRearR.Enabled = false;
+        try { await SpeakerDiagnostics.PlayToneAsync(device.Id, leftChannel, !leftChannel); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Speaker test failed"); }
+        finally { testRearL.Enabled = testRearR.Enabled = true; }
     }
 
     private void StopRouting()
