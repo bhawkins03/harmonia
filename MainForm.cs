@@ -7,6 +7,20 @@ namespace Harmonia;
 
 internal sealed class MainForm : Form
 {
+    // Enables double buffering for continuously updated speaker meters.
+    private sealed class BufferedMapPanel : Panel
+    {
+        public BufferedMapPanel()
+        {
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
+            UpdateStyles();
+        }
+    }
+
     private sealed record DeviceChoice(string Id, string Name)
     {
         public override string ToString() => Name;
@@ -23,11 +37,12 @@ internal sealed class MainForm : Form
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TableLayoutPanel assignmentsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
     private readonly Dictionary<SpeakerRole, ComboBox> selectors = new();
-    private readonly Panel map = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 29, 42) };
+    private readonly BufferedMapPanel map = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 29, 42) };
     private readonly Label status = new() { Text = "Stopped", AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Button start = new() { Text = "Start routing", Width = 130, Height = 34 };
     private readonly Button stop = new() { Text = "Stop routing", Width = 130, Height = 34, Enabled = false };
     private readonly Button refresh = new() { Text = "Refresh devices", Width = 130, Height = 34 };
+    private readonly Button snapshot = new() { Text = "Audio backup", Width = 115, Height = 34 };
     private readonly Button testRearL = new() { Text = "Test rear L", Width = 105, Height = 34 };
     private readonly Button testRearR = new() { Text = "Test rear R", Width = 105, Height = 34 };
     private readonly CheckBox strictInput = new() { Text = "Diagnostic: no stereo upmix (rear silent for stereo)", AutoSize = true, ForeColor = Color.Khaki, Padding = new Padding(0, 9, 0, 8) };
@@ -95,6 +110,7 @@ internal sealed class MainForm : Form
         footer.Controls.Add(start);
         footer.Controls.Add(stop);
         footer.Controls.Add(refresh);
+        footer.Controls.Add(snapshot);
         footer.Controls.Add(testRearL);
         footer.Controls.Add(testRearR);
         var statusLabel = new Label { Text = "Status:", AutoSize = true, Padding = new Padding(15, 8, 0, 0) };
@@ -117,6 +133,7 @@ internal sealed class MainForm : Form
         start.Click += (_, _) => StartRouting();
         stop.Click += (_, _) => StopRouting();
         refresh.Click += (_, _) => BuildSelectors();
+        snapshot.Click += (_, _) => ShowRecoverySnapshot();
         testRearL.Click += async (_, _) => await TestRearAsync(true);
         testRearR.Click += async (_, _) => await TestRearAsync(false);
         map.Paint += DrawSpeakerMap;
@@ -218,6 +235,22 @@ internal sealed class MainForm : Form
         SpeakerRole.RearStereo => "Rear stereo pair",
         _ => role.ToString()
     };
+
+    private void ShowRecoverySnapshot()
+    {
+        try
+        {
+            var info = AudioRecovery.Save();
+            MessageBox.Show(
+                $"Audio snapshot saved to:\n{AudioRecovery.SnapshotPath}\n\n" +
+                $"Default device: {info.DefaultDeviceName}\n" +
+                $"Capture format: {info.MixChannels} channels, {info.MixSampleRate} Hz ({info.MixEncoding})\n\n" +
+                "This is a read-only recovery record. It does not change or automatically restore Windows audio configuration. " +
+                "Automatic audio setting changes and restoration are intentionally disabled until the system supports verified, crash-safe rollback.",
+                "Harmonia audio backup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Backup failed", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
 
     private void StartRouting()
     {
