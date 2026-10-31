@@ -70,7 +70,7 @@ internal sealed class MainForm : Form
         options.Controls.Add(layout, 0, 1);
         var note = new Label
         {
-            Text = "Stereo source upmix • 5.1 beta is not discrete surround.\nLFE output is optional. Every active speaker group needs its own audio device.",
+            Text = "Auto: 6-channel PCM passthrough when the capture endpoint provides 5.1; otherwise stereo upmix.\nLFE optional. Default capture endpoint cannot be used as an output yet.",
             ForeColor = Color.Silver, AutoSize = true, MaximumSize = new Size(350, 0), Padding = new Padding(0, 12, 0, 12)
         };
         options.Controls.Add(note, 0, 2);
@@ -154,8 +154,9 @@ internal sealed class MainForm : Form
         loading = true;
         try
         {
-            var devices = audio.GetDevices().Where(x => x.Id != audio.DefaultDeviceId)
-                .Select(x => new DeviceChoice(x.Id, x.Name)).ToArray();
+            var defaultId = audio.DefaultDeviceId;
+            var devices = audio.GetDevices()
+                .Select(x => new DeviceChoice(x.Id, x.Name + (x.Id == defaultId ? " [Windows default — capture source]" : ""))).ToArray();
             assignmentsPanel.SuspendLayout();
             assignmentsPanel.Controls.Clear();
             assignmentsPanel.RowStyles.Clear();
@@ -209,14 +210,18 @@ internal sealed class MainForm : Form
         {
             audio.Start(CurrentLayout, selected);
             SaveSelection();
-            status.Text = "Routing active";
+            status.Text = audio.InputFormatDescription;
             start.Enabled = false;
             stop.Enabled = true;
             refresh.Enabled = false;
             layout.Enabled = false;
             foreach (var combo in selectors.Values) combo.Enabled = false;
         }
-        catch (Exception ex) { status.Text = "Unable to start"; MessageBox.Show(ex.Message, "Harmonia", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        catch (Exception ex)
+        {
+            status.Text = "Unable to start";
+            MessageBox.Show(ex.Message + "\n\nIf your headphones are the default Windows audio device, they appear in the list but cannot be used as an output with the current endpoint-loopback engine. Avoid feedback by selecting a separate capture endpoint or wait for process-exclusion capture support.", "Harmonia", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void StopRouting()
