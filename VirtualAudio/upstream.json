@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/microsoft/Windows-driver-samples.git",
+  "commit": "f4c1ff842b6a0001152f44cb61788b216a1c7627",
+  "wilCommit": "3c00e7f1d8cf9930bbb8e5be3ef0df65c84e8928",
+  "solution": "audio/sysvad/sysvad.sln",
+  "kitVersion": "10.0.28000.0"
+}
