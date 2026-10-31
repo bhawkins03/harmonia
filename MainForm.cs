@@ -28,6 +28,7 @@ internal sealed class MainForm : Form
     private readonly Button refresh = new() { Text = "Refresh devices", Width = 130, Height = 34 };
     private readonly Button testRearL = new() { Text = "Test rear L", Width = 105, Height = 34 };
     private readonly Button testRearR = new() { Text = "Test rear R", Width = 105, Height = 34 };
+    private readonly CheckBox strictInput = new() { Text = "Diagnostic: no stereo upmix (rear silent for stereo)", AutoSize = true, ForeColor = Color.Khaki, Padding = new Padding(0, 9, 0, 8) };
     private readonly NotifyIcon tray;
     private readonly Settings settings;
     private bool exiting;
@@ -80,6 +81,8 @@ internal sealed class MainForm : Form
         assignmentsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         assignmentsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         options.Controls.Add(assignmentsPanel, 0, 4);
+        options.RowCount = 6;
+        options.Controls.Add(strictInput, 0, 5);
         leftSide.Controls.Add(options);
         root.Controls.Add(leftSide, 0, 1);
 
@@ -214,13 +217,14 @@ internal sealed class MainForm : Form
                 selected[role] = device.Id;
         try
         {
-            audio.Start(CurrentLayout, selected);
+            audio.Start(CurrentLayout, selected, strictInput.Checked);
             SaveSelection();
             status.Text = audio.InputFormatDescription;
             start.Enabled = false;
             stop.Enabled = true;
             refresh.Enabled = false;
             layout.Enabled = false;
+            strictInput.Enabled = false;
             foreach (var combo in selectors.Values) combo.Enabled = false;
         }
         catch (Exception ex)
@@ -250,6 +254,7 @@ internal sealed class MainForm : Form
         stop.Enabled = false;
         refresh.Enabled = true;
         layout.Enabled = true;
+        strictInput.Enabled = true;
         foreach (var combo in selectors.Values) combo.Enabled = true;
     }
 
