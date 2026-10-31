@@ -15,6 +15,7 @@ internal sealed class AudioEngine : IDisposable
     private double lfeState;
 
     public bool IsRunning { get; private set; }
+    public string InputFormatDescription { get; private set; } = "Not running";
     public string DefaultDeviceId => enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID;
     public (string Id, string Name)[] GetDevices() =>
         enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
@@ -51,8 +52,9 @@ internal sealed class AudioEngine : IDisposable
             bool supported = isFloat && input.BitsPerSample == 32
                 || (input.Encoding == WaveFormatEncoding.Pcm || input.Encoding == WaveFormatEncoding.Extensible)
                    && (input.BitsPerSample == 16 || input.BitsPerSample == 24 || input.BitsPerSample == 32);
-            if (input.Channels != 2 || !supported || input.BlockAlign != bytesPerSample * 2)
-                throw new NotSupportedException($"Only stereo PCM and 32-bit float sources are supported: {input}.");
+            if ((input.Channels != 2 && input.Channels != 6) || !supported || input.BlockAlign != bytesPerSample * input.Channels)
+                throw new NotSupportedException($"Only 2-channel or 6-channel PCM/float capture is supported: {input}.");
+            InputFormatDescription = input.Channels == 6 ? $"Native 5.1 PCM ({input.SampleRate} Hz)" : $"Stereo input • synthesized surround ({input.SampleRate} Hz)";
             var outputFormat = WaveFormat.CreateIeeeFloatWaveFormat(input.SampleRate, 2);
             foreach (var role in selected)
             {
@@ -81,11 +83,14 @@ internal sealed class AudioEngine : IDisposable
                     int off = frame * input.BlockAlign;
                     float l = ReadSample(e.Buffer, off, input, isFloat);
                     float r = ReadSample(e.Buffer, off + bytesPerSample, input, isFloat);
-                    float center = (l + r) * 0.5f;
+                    bool discrete = input.Channels == 6;
+                    // Standard WAVEFORMATEXTENSIBLE 5.1 mapping: FL FR FC LFE BL BR,
+                    // or FL FR FC LFE SL SR. Both have the same interleaved indices.
+                    float center = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 2, input, isFloat) : (l + r) * 0.5f;
                     lfeState += alpha * (center - lfeState);
-                    float lfe = (float)lfeState * 0.5f;
-                    float rearL = (l - r) * 0.5f;
-                    float rearR = (r - l) * 0.5f;
+                    float lfe = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 3, input, isFloat) : (float)lfeState * 0.5f;
+                    float rearL = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 4, input, isFloat) : (l - r) * 0.5f;
+                    float rearR = discrete ? ReadSample(e.Buffer, off + bytesPerSample * 5, input, isFloat) : (r - l) * 0.5f;
                     foreach (var (role, buffer) in buffers)
                     {
                         (float a, float b) = role switch
@@ -138,6 +143,7 @@ internal sealed class AudioEngine : IDisposable
         sinks.Clear();
         capture?.Dispose();
         capture = null;
+        InputFormatDescription = "Not running";
     }
 
     public void Dispose() { Stop(); enumerator.Dispose(); }
