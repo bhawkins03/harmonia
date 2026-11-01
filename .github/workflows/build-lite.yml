@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lite:
@@ -71,3 +71,34 @@ jobs:
           path: Harmonia-Lite-win-x64.zip
           if-no-files-found: error
           retention-days: 30
+
+  publish-preview:
+    name: Publish Lite preview to Releases
+    needs: lite
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/lite-suite-editions'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download tested Lite ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: Harmonia-Lite-win-x64
+          path: release
+
+      - name: Verify release file
+        run: test -s release/Harmonia-Lite-win-x64.zip
+
+      - name: Publish prerelease (one-time version)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if gh release view v0.1.0-lite-preview >/dev/null 2>&1; then
+            echo "Preview release already exists; not overwriting an existing build."
+            exit 0
+          fi
+          gh release create v0.1.0-lite-preview release/Harmonia-Lite-win-x64.zip \
+            --target "$GITHUB_SHA" \
+            --title "Harmonia Lite v0.1.0 — Preview" \
+            --notes "Portable, driverless Windows x64 preview. Download Harmonia-Lite-win-x64.zip, extract and run Harmonia.exe. No PowerShell, Git, Visual Studio, or separate .NET installation needed. Uses the experimental WASAPI loopback backend; no virtual playback driver, no native 5.1 input guarantee, and independent output clocks can drift. This is an unsigned early preview, not a production-ready release. Harmonia Suite remains in kernel-driver development and is not included." \
+            --prerelease
