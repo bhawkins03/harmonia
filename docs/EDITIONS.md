@@ -4,10 +4,11 @@ Harmonia is **one codebase with two distribution targets**, not two diverging fo
 
 ## Harmonia Lite
 
-Driverless Windows WinForms audio router, based on the existing WASAPI
-loopback backend. It can distribute audio among selected Windows render endpoints
-and retains the existing experimental speaker maps, channel tests and meters.
-It must not claim native, independently selectable virtual surround capture.
+Driverless Windows WinForms stereo router, based on the existing WASAPI
+loopback backend. Choose one Windows render endpoint for the left audio channel,
+and another for the right audio channel; each mono channel is duplicated onto
+its selected stereo physical endpoint. Adjust the left and right gains independently.
+No center, LFE, rear speaker routing, surround upmix, or map editor in Lite.
 A default Windows endpoint cannot also be reused as a routed output in this
 backend, and multi-device clock drift remains a limitation.
 
