@@ -12,6 +12,7 @@ $source=Join-Path $root 'tests/TransportProtocolTests.cpp'
 $smoke=Join-Path $root 'tests/TransportKernelCompile.cpp'
 $queueSource=Join-Path $root 'tests/TransportQueueTests.cpp'
 $queueConstexpr=Join-Path $root 'tests/TransportQueueConstexpr.cpp'
+$rightsSource=Join-Path $root 'tests/ContentRightsPolicyTests.cpp'
 $batch=Join-Path $output 'compile.cmd'
 $optimization=if($Configuration -eq 'Debug') {'/Od /Zi'} else {'/O2'}
 @"
@@ -24,6 +25,8 @@ cl /nologo /std:c++17 /EHsc /W4 /WX /permissive- /MT $optimization /Fo"$output/q
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /kernel /c /W4 /WX /constexpr:steps10000000 /Fo"$output/queue-constexpr.obj" "$queueConstexpr"
 if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /permissive- /MT $optimization /Fo"$output/rights.obj" /Fe"$output/rights.exe" "$rightsSource" /link /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /kernel /c /W4 /WX /Fo"$output/kernel.obj" "$smoke"
 exit /b %errorlevel%
 "@ | Set-Content $batch
@@ -34,6 +37,8 @@ $fixtures=Join-Path $root 'tests/vectors/transport-v1.txt'
 if ($LASTEXITCODE -ne 0) { throw 'C++ transport tests failed.' }
 & (Join-Path $output 'queue.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Native queue tests failed.' }
+& (Join-Path $output 'rights.exe')
+if ($LASTEXITCODE -ne 0) { throw 'Content-rights policy tests failed.' }
 & dotnet build (Join-Path $root 'tests/TransportProtocol.Tests/TransportProtocol.Tests.csproj') --configuration $Configuration
 if ($LASTEXITCODE -ne 0) { throw 'C# transport test build failed.' }
 & dotnet (Join-Path $root "tests/TransportProtocol.Tests/bin/$Configuration/net8.0/TransportProtocol.Tests.dll") $fixtures $output

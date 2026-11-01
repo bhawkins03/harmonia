@@ -25,10 +25,15 @@ installation, privilege-aware upgrades/uninstallation, separate service
 lifetimes and real VM/hardware verification.
 
 **Not a finished edition yet.** Although D2.1 and D2.2 driver source is on
-main, there is no deployed, validated end-to-end driver-to-app transport or
-user-mode audio service. The driver does not yet provide a working virtual
-sound output. Do not label an unsigned development archive a public Suite
-release.
+main, there is no validated end-to-end driver-to-app transport or user-mode
+audio service. The official Suite development baseline now includes a signed
+VM-tested virtual render endpoint: 48-kHz six-channel Float32 playback, PCM
+export through SYSTEM and restricted LocalService, channel isolation, access
+denial and simulated CopyProtect denial passed on November 1, 2026. The normal
+Release driver was restored and retested. See [VM evidence and pending work](../VirtualAudio/VM_HANDOFF.md).
+Service/client and frontend routing integration remain pending. Source packages
+are unsigned; development test signing does not establish production readiness.
+Do not label an unsigned development archive a public Suite release.
 
 ## Friend-friendly download
 

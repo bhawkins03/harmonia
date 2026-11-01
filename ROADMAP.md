@@ -3,8 +3,9 @@
 The audio-driver architecture on `main` is the official development baseline.
 Use the root `Build.ps1` for the app, native policy checks and driver package.
 This baseline is a development milestone, not a signed runtime release.
-The owner has designated D2.2 as the main build; further development and runtime
-testing take place in a VM. See VirtualAudio/VM_HANDOFF.md.
+The owner has designated the VM-validated D2.2 driver as the Suite main build;
+further development and runtime testing take place in a VM. Lite branches and
+its driverless release remain independent. See VirtualAudio/VM_HANDOFF.md.
 
 ## Completed build milestones
 
@@ -18,8 +19,11 @@ testing take place in a VM. See VirtualAudio/VM_HANDOFF.md.
 
 - [x] D2.2 source: bounded kernel PCM queue and secured control interface.
 - [x] D2.1 versioned wire format, C++/C# codecs and golden-vector tests.
-- [x] D2.2 handlers for format/state, generations and loss counters (uninstalled).
-- [ ] Installed-driver verification of ACLs, cancellation, disconnect, PnP and DRM.
+- [x] D2.2 handlers for format/state, generations and loss counters.
+- [x] Signed VM installation, healthy endpoint enumeration and exact package hashes.
+- [x] Live SYSTEM/restricted LocalService PCM export and six-channel isolation.
+- [x] Unauthorized-access denial and simulated CopyProtect export denial.
+- [ ] Remaining cancellation, process-death, PnP and Driver Verifier stress checks.
 
 ## Routing integration (D3/D4)
 
@@ -30,8 +34,9 @@ testing take place in a VM. See VirtualAudio/VM_HANDOFF.md.
 
 ## Distribution and later features
 
-- [ ] Signing, installation/uninstallation and signed test-machine validation.
-- [ ] Validate actual Windows shared-mode stereo/5.1 negotiation.
+- [x] Development signing, installation and isolated VM runtime validation.
+- [x] Shared-mode 48-kHz six-channel Float32 render and software loopback in VM.
+- [ ] Additional stereo/5.1 negotiation, production signing and uninstall validation.
 - [ ] DSP/EQ, calibrated layouts, presets and additional sources.
 
 Audio configuration changes must be explicit and recoverable. Building source

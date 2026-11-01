@@ -54,6 +54,12 @@ HKR,,CLSID,,%Proxy%
 HKR,,FriendlyName,,%DeviceName%
 HKR,EP\0,%Association%,,%AnyNode%
 HKR,EP\0,%EventDriven%,0x00010001,1
+; VT_BLOB (65), 40-byte WAVEFORMATEXTENSIBLE: 48 kHz Float32, 5.1 side.
+; Float-only pins need an explicit supported OEM default, rather than the
+; endpoint builder's generic integer-PCM fallback. Matches DEFAULT/RAW mode.
+HKR,EP\0,%OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,\
+ FE,FF,06,00,80,BB,00,00,00,94,11,00,18,00,20,00,16,00,20,00,0F,06,00,00,\
+ 03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 
 [HarmoniaDevice.NT.Services]
 AddService=HarmoniaVirtualAudio,0x00000002,Harmonia.Service
@@ -84,3 +90,4 @@ Topology="{DDA54A40-1E4C-11D1-A050-405705C10000}"
 AnyNode="{00000000-0000-0000-0000-000000000000}"
 Association="{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
 EventDriven="{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+OEMFormat="{E4870E26-3CC5-4CD2-BA46-CA0A9A70ED04},3"

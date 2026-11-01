@@ -5,9 +5,13 @@
 #include "minwavert.h"
 #include "minwavertstream.h"
 #include "../HarmoniaTransport.h"
+#include "../../native/ContentRightsPolicy.h"
 #include "UnittestData.h"
 #include "AudioModuleHelper.h"
 #define MINWAVERTSTREAM_POOLTAG 'SRWM'
+#if defined(HARMONIA_TEST_PROTECTED_STREAM) && !DBG
+#error Protection simulation is restricted to Debug VM test builds.
+#endif
 
 #pragma warning (disable : 4127)
 
@@ -436,6 +440,13 @@ Return Value:
     {
         m_bUnregisterStream = TRUE;
         if (!m_bCapture) HarmoniaTransportBegin(this,m_pWfExt->Format.nChannels,m_pWfExt->dwChannelMask);
+        if (!m_bCapture) {
+            // PortCls starts streams with documented default content ID zero.
+            // Independently verify its derived DRMK rights before any PCM can
+            // be published; later DRM callbacks revoke/flush before regranting.
+            DRMRIGHTS defaults{};
+            (void)SetContentId(0,&defaults);
+        }
     }
 
     return ntStatus;
@@ -1584,6 +1595,14 @@ Return Value:
 
     DPF_ENTER(("[CMiniportWaveRT::SetContentId]"));
 
+#if defined(HARMONIA_TEST_PROTECTED_STREAM)
+    // Development-only denial injection: generated ordinary audio is treated
+    // as CopyProtect. This hook can only remove export permission.
+    DRMRIGHTS protectedRights{};
+    if (drmRights) protectedRights=*drmRights;
+    protectedRights.CopyProtect=TRUE;
+    drmRights=&protectedRights;
+#endif
     HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
     KIRQL rightsIrql;KeAcquireSpinLock(&m_PositionSpinLock,&rightsIrql);
     m_TransportExportEligible=false;m_TransportWindow.Reset();
@@ -1612,8 +1631,8 @@ Return Value:
     // stream indicates that the stream is CopyProtected, stop writing to disk.
     //
     DRMRIGHTS verified{};
-    const bool eligible=NT_SUCCESS(ntStatus) && drmRights && !drmRights->Reserved && !drmRights->CopyProtect && !drmRights->DigitalOutputDisable &&
-        NT_SUCCESS(m_pMiniport->QueryExportRights(contentId,&verified)) && !verified.Reserved && !verified.CopyProtect && !verified.DigitalOutputDisable;
+    const bool eligible=NT_SUCCESS(ntStatus) && drmRights && harmonia::contentrights::Clear(*drmRights) &&
+        NT_SUCCESS(m_pMiniport->QueryExportRights(contentId,&verified)) && harmonia::contentrights::Clear(verified);
     KeAcquireSpinLock(&m_PositionSpinLock,&rightsIrql);
     HarmoniaTransportGrant(this,exportTicket,eligible);
     // A fresh SetWritePacket after this boundary must establish a new floor.

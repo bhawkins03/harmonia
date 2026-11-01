@@ -22,6 +22,7 @@ Abstract:
 #include "simple.h"
 #include "minwavert.h"
 #include "../../native/EndpointProfile.h"
+#include "../../native/ContentRightsPolicy.h"
 #include "minwavertstream.h"
 #include "IHVPrivatePropertySet.h"
 #include "AudioModuleHelper.h"
@@ -2441,7 +2442,7 @@ Return Value:
     //
     if (NT_SUCCESS(ntStatus))
     {
-        m_pDrmPort->DestroyContent(m_ulMixDrmContentId);
+        if (m_ulMixDrmContentId) m_pDrmPort->DestroyContent(m_ulMixDrmContentId);
         m_ulMixDrmContentId = ulMixDrmContentId;
         RtlCopyMemory(&m_MixDrmRights, &MixDrmRights, sizeof(m_MixDrmRights));
 
@@ -3933,6 +3934,5 @@ Exit:
 NTSTATUS CMiniportWaveRT::QueryExportRights(ULONG id, PDRMRIGHTS rights)
 {
     PAGED_CODE();
-    if (!m_pDrmPort || !rights || !id) return STATUS_ACCESS_DENIED;
-    return m_pDrmPort->GetContentRights(id, rights);
+    return harmonia::contentrights::Query(m_pDrmPort,id,rights);
 }

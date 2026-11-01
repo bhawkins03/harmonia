@@ -30,17 +30,24 @@ Harmonia is an open-source Windows audio-routing project. The **audio-driver
 architecture on `main` is the official development baseline** going forward.
 It combines a native virtual playback driver with a C# Windows desktop app.
 
-The main development build includes the D2.2 bounded kernel PCM queue and secured v1 control interface,
-plus C++/C# protocol tests. The driver is unsigned, uninstalled, and has not been
-runtime-tested. Export fails closed without positively verified rights and fresh
-packet commits. The desktop app does not consume this transport yet.
+The official **Suite main development build** includes the VM-validated D2.2
+driver, bounded kernel PCM queue, secured v1 control interface, and C++/C#
+protocol tests. On November 1, 2026, signed VM tests passed six-channel PCM
+export through SYSTEM and restricted LocalService, unauthorized-access denial,
+and simulated CopyProtect denial. The normal Release driver was restored and
+retested. Export requires positively verified rights and fresh packet commits.
+The desktop app does not consume this transport yet; service/client and routing
+integration remain the next milestone. Source builds produce unsigned packages;
+VM development signing is separate from production signing.
 See [D2.2 audit and limitations](VirtualAudio/D2_2_AUDIT.md),
 [validation status](VirtualAudio/D2_2_STATUS.md), and
 [the approved security policy](VirtualAudio/D2_SECURITY.md).
 
 All further development and driver/runtime testing will take place in a VM.
 See the [VM handoff](VirtualAudio/VM_HANDOFF.md) for setup, build commands and
-remaining validation. Promotion to main does not establish working audio export.
+remaining validation. These driver tests do not establish end-to-end Suite or
+production readiness. Lite's branches, release workflow and driverless backend
+are independent of this Suite milestone.
 
 ## Official build
 
@@ -75,8 +82,8 @@ Build logs and metadata are under ignored `VirtualAudio/.work/logs/`.
 See [D1 validation and limitations](VirtualAudio/D1_STATUS.md) and the
 [driver implementation plan](VirtualAudio/IMPLEMENTATION.md).
 
-Next: signed isolated-environment transport validation, service/client and routing integration,
-Windows audio/runtime validation, and signing/installation packaging.
+Next: Suite service/client and routing integration, Driver Verifier and lifecycle
+stress, latency/timestamp validation, and production signing/installation packaging.
 
 ## Desktop app
 

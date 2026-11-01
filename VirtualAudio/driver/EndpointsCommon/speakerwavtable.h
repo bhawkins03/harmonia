@@ -30,9 +30,11 @@ static PIN_DEVICE_FORMATS_AND_MODES SpeakerPinDeviceFormatsAndModes[] = {
       SpeakerHostPinSupportedDeviceModes, SIZEOF_ARRAY(SpeakerHostPinSupportedDeviceModes) },
     { BridgePin, NULL, 0, NULL, 0 },
 };
+// Endpoint discovery requires a PCM-family wildcard range. Concrete formats
+// and intersection/stream validation remain strictly IEEE Float32.
 #define HARMONIA_RANGE(channels) \
 { { sizeof(KSDATARANGE_AUDIO), KSDATARANGE_ATTRIBUTES, 0, 0, \
-    STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO), STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT), \
+    STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO), STATICGUIDOF(KSDATAFORMAT_SUBTYPE_WILDCARD), \
     STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX) }, channels, 32, 32, 48000, 48000 }
 static KSDATARANGE_AUDIO SpeakerPinDataRangesStream[] = { HARMONIA_RANGE(2), HARMONIA_RANGE(6) };
 #undef HARMONIA_RANGE
@@ -63,4 +65,3 @@ static PCFILTER_DESCRIPTOR SpeakerWaveMiniportFilterDescriptor = {
     0, &AutomationSpeakerWaveFilter, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(SpeakerWaveMiniportPins), SpeakerWaveMiniportPins,
     0, 0, NULL, SIZEOF_ARRAY(SpeakerWaveMiniportConnections), SpeakerWaveMiniportConnections, 0, NULL
 };
-

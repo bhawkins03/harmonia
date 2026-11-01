@@ -1,5 +1,23 @@
 # D2.2 validation status
 
+## Suite main baseline update: 2026-11-01
+
+The owner designated the VM-validated driver as the main Suite development
+build. Signed VM tests passed normal six-channel PCM publication/isolation
+through SYSTEM and restricted LocalService, unauthorized access denial, and
+simulated CopyProtect denial while playback advanced. The normal Release driver
+was restored and retested with exact deployed INF/SYS hash checks. The complete
+Suite Release build and protocol/queue/rights/security/package checks passed
+again after synchronizing with current GitHub main. See [VM_HANDOFF.md](VM_HANDOFF.md)
+for detailed results and evidence locations; [VM_DRM_REVIEW.md](VM_DRM_REVIEW.md)
+records the approved default-content rights change. These updates supersede
+historical no-runtime-test/zero-content-ID statements in the original status
+and audit. Frontend transport integration, remaining lifecycle/Verifier checks,
+latency/timestamp validation and production distribution remain pending.
+Lite branch heads and Lite implementation are outside this Suite change.
+
+The original implementation and October 31 static-validation record follow.
+
 The owner has authorized promotion of the D2.2 implementation through PR #20
 to main as the VM development build. The original implementation was reviewed
 as a draft; this promotion does not establish runtime safety or a signed release.
