@@ -9,6 +9,7 @@ on:
       - '**/*.csproj'
       - '.github/workflows/build-lite.yml'
       - 'scripts/**'
+      - '.github/workflows/build-lite.yml'
   pull_request:
     paths:
       - '**/*.cs'
@@ -34,7 +35,7 @@ jobs:
       - name: Publish portable, self-contained Lite EXE
         shell: pwsh
         run: |
-          dotnet publish Harmonia.csproj -c Release -r win-x64 --self-contained true -o Lite-Output -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -p:IncludeNativeLibrariesForSelfExtract=true
+          dotnet publish Harmonia.csproj -c Release -r win-x64 --self-contained true -o Lite-Output -p:LiteEdition=true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -p:IncludeNativeLibrariesForSelfExtract=true
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path 'Lite-Output/Harmonia.exe')) { throw 'Lite executable missing' }
           if (Get-ChildItem Lite-Output -Include '*.sys','*.inf','*.cat' -Recurse) { throw 'Driver files in Lite output' }
@@ -82,6 +83,9 @@ jobs:
       - name: Check out release version
         uses: actions/checkout@v4
 
+      - name: Check out release metadata
+        uses: actions/checkout@v4
+
       - name: Download tested Lite ZIP
         uses: actions/download-artifact@v4
         with:
@@ -106,5 +110,4 @@ jobs:
           gh release create "$TAG" release/Harmonia-Lite-win-x64.zip \
             --target "$GITHUB_SHA" \
             --title "Harmonia Lite $TAG — Preview" \
-            --notes "Portable, driverless Windows x64 preview. Download Harmonia-Lite-win-x64.zip, extract and run Harmonia.exe. No PowerShell, Git, Visual Studio, or separate .NET installation needed. Uses the experimental WASAPI loopback backend; no virtual playback driver, no native 5.1 input guarantee, and independent output clocks can drift. This is an unsigned early preview, not a production-ready release. Harmonia Suite remains in kernel-driver development and is not included." \
-            --prerelease
+            --notes "Harmonia Lite v0.2.0: driverless, stereo-only dual-endpoint routing. Choose left and right separate output devices and adjust independent volume levels. Download Harmonia-Lite-win-x64.zip, extract and run Harmonia.exe. No PowerShell, Git, Visual Studio, or separate .NET installation needed. Uses the experimental WASAPI loopback backend; no virtual playback driver, no native 5.1 input guarantee, and independent output clocks can drift. This is an unsigned early preview, not a production-ready release. Harmonia Suite remains in kernel-driver development and is not included."
