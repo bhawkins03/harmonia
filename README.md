@@ -7,6 +7,12 @@
 | **Harmonia Lite** | Friends and Windows users wanting driverless, experimental multi-device audio routing using WASAPI loopback | [Download the latest Lite preview](https://github.com/bhawkins03/harmonia/releases/tag/v0.1.0-lite-preview) (Windows x64 portable ZIP) |
 | **Harmonia Suite** | Users who want a selectable virtual Windows 5.1 render device and native discrete-channel routing | **In development — no functional public installer yet.** |
 
+**Lite updates:** On startup, Lite can check GitHub Releases for newer Lite
+versions and ask before installing them. The setting **Check for Lite updates
+on startup** can be turned off or back on inside the app; **Check for updates
+now** remains available for manual checks. This is a preview feature pending
+Windows build and VM tests. Existing v0.1.0 downloads do not include it.
+
 **Using Lite:** Download `Harmonia-Lite-win-x64.zip`, extract it, and double-click
 `Harmonia.exe`. No Git, PowerShell, .NET SDK, or separate .NET runtime is needed
 for the self-contained build. No driver installation is required. The preview
