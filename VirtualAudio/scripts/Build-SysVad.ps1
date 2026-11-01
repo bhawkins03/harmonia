@@ -13,7 +13,7 @@ $pin = Get-Content (Join-Path $PSScriptRoot '../upstream.json') -Raw | ConvertFr
 if (!$MSBuildPath) {
     $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
     if (Test-Path $vswhere) {
-        $MSBuildPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+        $MSBuildPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'MSBuild\**\Bin\amd64\MSBuild.exe' | Select-Object -First 1
     }
 }
 if (!$MSBuildPath -or !(Test-Path $MSBuildPath)) {
@@ -37,7 +37,7 @@ $log = Join-Path $LogDirectory "sysvad-$Configuration-x64-$stamp"
 $buildArgs = @((Join-Path $Source $pin.solution), '/t:Build', '/m', '/nr:false',
     "/p:Configuration=$Configuration", '/p:Platform=x64',
     "/p:WindowsTargetPlatformVersion=$($pin.kitVersion)",
-    '/p:SignMode=Off', '/p:EnableDeployment=false', "/bl:$log.binlog", '/fl', "/flp:logfile=$log.log;verbosity=normal")
+    '/p:SignMode=Off', '/p:EnableDeployment=false', "/bl:$log.binlog", '/fl', "/flp:logfile=$log.log;verbosity=diagnostic")
 @{ upstream = $pin; msbuild = $MSBuildPath; msbuildVersion = (& $MSBuildPath -version -nologo | Out-String).Trim();
    configuration = $Configuration; platform = 'x64'; arguments = $buildArgs; startedUtc = [DateTime]::UtcNow.ToString('o')
 } | ConvertTo-Json -Depth 5 | Set-Content "$log.json"

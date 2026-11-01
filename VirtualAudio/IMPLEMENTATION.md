@@ -1,7 +1,7 @@
 # SysVAD source preparation and implementation
 
-Status: pinned source preparation complete; native compilation blocked on missing
-C++/SDK/WDK tools. No operational Harmonia endpoint exists.
+Status: D0 passed on 2026-10-31: pinned SysVAD x64 Debug and Release builds
+completed with zero warnings/errors. No operational Harmonia endpoint exists.
 
 ## Reproduce D0
 
@@ -42,9 +42,16 @@ Do not follow upstream deployment/security-disable instructions in this workflow
 Initial environment: .NET SDK 8.0.427; no native MSBuild/C++, SDK or WDK detected
 in standard locations or kit registry/environment. Pinned source preparation
 including WIL succeeded. Build preflight fails for missing native MSBuild.
-**D0 has not passed; no installers or driver deployment were run.**
+This initial toolchain blocker was resolved on 2026-10-31. SDK 28000.2957,
+WDK 28000.2526, and Visual Studio WDK Build Tools were installed. Both reference
+builds passed using the amd64 MSBuild host, now selected by the wrapper.
+See D0_STATUS.md for evidence. No driver deployment was run.
 
 ## D1: minimal Harmonia fork
+
+Implemented and built; see [D1_STATUS.md](D1_STATUS.md) for the current fork,
+commands, validation and runtime limitations. The outline below is the original
+implementation plan; the minimal fork omits loopback as well as offload.
 
 After successful reference Debug/Release builds, copy the sample into a separate
 source tree and preserve all upstream MIT notices. Adapt these files under

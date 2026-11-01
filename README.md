@@ -1,77 +1,62 @@
 # Harmonia
 
-**Open-source Windows audio management (early prototype)**
+Harmonia is an open-source Windows audio-routing project. The **audio-driver
+architecture on `main` is the official development baseline** going forward.
+It combines a native virtual playback driver with a C# Windows desktop app.
 
-Harmonia aims to unify audio routing, mixing, EQ, device synchronization and eventually custom surround speaker layouts. The first milestone mirrors the left channel of the default Windows stereo mix to one DisplayPort monitor, and the right channel to another monitor. Each selected channel is duplicated to both speakers inside its monitor.
+The minimal driver builds, but the driver-to-app audio transport is not yet
+implemented. The driver currently discards playback audio. It is unsigned,
+uninstalled, and has not been runtime-tested; this is a development build.
 
-> Experimental, source-only prototype. Not yet tested on target hardware. Expect latency and possible clock drift between monitors.
+## Official build
 
-## Core principle
+Requires Windows, .NET 8 SDK, Visual Studio 2026 C++ Build Tools with WDK Build
+Tools and Spectre/ATL libraries, and matching Windows SDK/WDK build 28000.
+See [driver setup](VirtualAudio/IMPLEMENTATION.md) for details.
 
-**Do not change Windows audio configuration.** This prototype does not change default playback devices, system volume, per-app routing or the registry. Stopping Harmonia ends its own additional audio playback.
+From the repository root:
 
-**Limitation:** the existing default Windows output remains audible if its speakers are active; this prototype mirrors sound and does not replace the default output.
+```powershell
+./Build.ps1
+./Build.ps1 -Configuration Debug
+```
 
-## Run
+The default Release build compiles the desktop app, compiles the native format
+policy tests, and builds/validates the unsigned x64 driver package. It does not
+install the driver, add certificates, or change Windows audio settings.
 
-Prerequisites: Windows 10/11 and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+App output: `bin/Release/net8.0-windows/`.
+Driver package: `VirtualAudio/driver/Package/x64/Release/HarmoniaPackage/`.
+The package contains `HarmoniaVirtualAudio.sys`, its INF and unsigned catalog.
+Build logs and metadata are under ignored `VirtualAudio/.work/logs/`.
 
-From the folder containing `Harmonia.csproj`:
+## Driver baseline
 
-```cmd
-dotnet restore Harmonia.csproj
+- Device name: **Harmonia Virtual Audio**; ID: `ROOT\HarmoniaVirtualAudio`.
+- Stereo and discrete 5.1 layouts at 48 kHz Float32.
+- One render stream; no capture endpoints, offload, or sample effects.
+- Debug/Release compilation and WDK package checks pass locally.
+
+See [D1 validation and limitations](VirtualAudio/D1_STATUS.md) and the
+[driver implementation plan](VirtualAudio/IMPLEMENTATION.md).
+
+Next: secure, bounded PCM transport to the app, routing-engine integration,
+Windows audio/runtime validation, and signing/installation packaging.
+
+## Desktop app
+
+The existing WinForms app remains available for experimental WASAPI loopback
+routing, speaker layouts, meters, channel tests, and recovery controls:
+
+```powershell
 dotnet run --project Harmonia.csproj
 ```
 
-Select two distinct playback endpoints that are **not** the existing Windows default playback endpoint. Press Enter to stop.
+This backend still captures the existing Windows default output. It does not
+consume the new virtual driver's audio yet. Independent output clocks can
+drift; stereo upmix is distinct from native 5.1 input. No real-hardware audio
+validation is claimed. See [native surround notes](docs/NATIVE_SURROUND.md).
 
-```cmd
-dotnet run --project Harmonia.csproj -- --list
-dotnet run --project Harmonia.csproj -- --reset
-```
-
-The app stores its own selected endpoint IDs at `%LOCALAPPDATA%\Harmonia\settings.json`; it never changes Windows sound settings.
-
-Smart App Control may block unsigned executables. Do not disable Windows security just to run this prototype.
-
-## Design
-
-C# / .NET 8 / NAudio 2.2.1, with WASAPI loopback capture and two independent shared-mode WASAPI playback devices.
-
-## Limitations
-
-- No GUI or output-device clock synchronization yet.
-- Independent monitor clocks can drift; buffering can cause audible latency.
-- Only stereo capture formats PCM 16/24/32 and 32-bit float have initial handling.
-- A source output with audible speakers remains audible.
-- No hot-plug recovery or channel-test controls.
-- The prototype has not been compiled or validated against actual hardware here.
-
-See [ROADMAP.md](ROADMAP.md) for development priorities and [CONTRIBUTING.md](CONTRIBUTING.md) for contributions.
-
-## Speaker layouts (experimental feature branch)
-
-The `feature/speaker-layouts` branch introduces a graphical speaker-layout selector and a top-down listener-centered display, rendered with native Windows drawing primitives.
-
-| Layout | Playback endpoints | Routing |
-| --- | --- | --- |
-| Dual monitor (stereo) | Front left + front right | Left channel on left monitor's two speakers; right channel on right monitor's two speakers |
-| Triple monitor (stereo + center) | Front left + front right + center | Left and right as above, center gets (L+R)/2 |
-| (Beta) Surround 5.1 | Front left, front right, center, one stereo rear device; optional separate LFE | Center=(L+R)/2; rear stereo=(L-R)/2 and (R-L)/2; LFE is a simple low-pass mono approximation |
-
-**Important:** This is a stereo-to-surround experiment, NOT native/discrete 5.1 decoding, and is not calibrated. It may sound odd with mono audio, which cancels in the difference-derived rear speakers. The rear device gets two distinct channels on a single stereo playback endpoint. The subwoofer endpoint is optional and requires its own dedicated Windows playback device. If absent, this is effectively a 5.0 output layout, despite the beta selector label.
-
-Each selected playback endpoint must be distinct, and none may be the current Windows default playback device; the default source continues playing normally.
-
-To test before merging the branch:
-
-```cmd
-git fetch origin
-git switch feature/speaker-layouts
-dotnet restore
-dotnet run
-```
-
-The UI includes a simplified, schematic speaker-position map (not a distance-calibrated room model). It uses custom GDI+ vector shapes requiring no third-party asset licenses. Real device synchronization, safe multichannel DSP, speaker calibration, and polished iconography remain future work.
-
-The code is experimental and has not been compiled on a Windows machine in this environment.
+Driver source derives from Microsoft's MIT-licensed SysVAD sample; its license
+and notices are retained in `VirtualAudio/driver/`. See [LICENSE](LICENSE),
+[ROADMAP.md](ROADMAP.md), and [CONTRIBUTING.md](CONTRIBUTING.md).

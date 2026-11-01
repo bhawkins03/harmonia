@@ -1,30 +1,35 @@
 # Harmonia roadmap
 
-## v0.2 — Experimental stereo mirror
-- [x] Capture existing default Windows playback device via WASAPI loopback
-- [x] Send left channel to one monitor and right to another
-- [x] Duplicate mono channel to both speakers per monitor
-- [x] Remember selected endpoints in Harmonia's own settings file
-- [ ] Validate build and real hardware playback
-- [ ] Verify Windows audio settings remain untouched
+The audio-driver architecture on `main` is the official development baseline.
+Use the root `Build.ps1` for the app, native policy checks and driver package.
+This baseline is a development milestone, not a signed runtime release.
 
-## v0.3 — Windows desktop interface
-- [ ] WPF device selection, start/stop, status and errors
-- [ ] Left/right channel test controls
-- [ ] Independent volume sliders
-- [ ] Handle device removal and defaults changing
+## Completed build milestones
 
-## v0.4 — Reliable multi-device audio
-- [ ] Adaptive sample-rate/clock drift correction
-- [ ] Better low-latency buffering
-- [ ] Robust shutdown, recovery and synchronization tests
+- [x] WinForms app with experimental loopback routing and speaker controls.
+- [x] Pinned SysVAD reference builds in x64 Debug and Release (D0).
+- [x] Harmonia render-only driver fork with unique device/service identity (D1).
+- [x] Stereo and 5.1 Float32 format policy at 48 kHz.
+- [x] Local native builds, policy checks, WDK INF/API and catalog validation.
 
-## v0.5+ — Universal audio engine
-- [ ] Routing matrix / modular processing graph
-- [ ] Per-app and multi-source input routing (investigate Windows APIs / virtual device tradeoffs)
-- [ ] EQ, filters and DSP
-- [ ] 5.1/7.1 and custom surround downmix/upmix, speaker calibration
-- [ ] Presets, profiles and system-tray controls
+## Next: driver audio transport (D2)
 
-### Non-negotiable principle
-No permanent modifications to Windows audio configuration. If any future feature requires temporary routing changes, it must be clearly opt-in and include safe recovery for crashes and forced termination.
+- [ ] Bounded kernel PCM queue and secured user-mode control interface.
+- [ ] Versioned block protocol, format/state changes and loss counters.
+- [ ] Cancellation, close, disconnect, PnP removal and DRM behavior.
+
+## Routing integration (D3/D4)
+
+- [ ] Connect the native transport to a UI-independent routing host.
+- [ ] Preserve discrete channels and validate masks/subformats.
+- [ ] Channel-isolation, overflow, restart, sleep/wake and removal tests.
+- [ ] Clock-drift correction and long-running multi-device playback checks.
+
+## Distribution and later features
+
+- [ ] Signing, installation/uninstallation and signed test-machine validation.
+- [ ] Validate actual Windows shared-mode stereo/5.1 negotiation.
+- [ ] DSP/EQ, calibrated layouts, presets and additional sources.
+
+Audio configuration changes must be explicit and recoverable. Building source
+does not install a driver or change Windows devices or security settings.

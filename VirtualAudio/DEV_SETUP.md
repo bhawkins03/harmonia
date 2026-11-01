@@ -1,8 +1,8 @@
 # Development setup for driver work
 
 For the pinned source preparation scripts, current toolchain requirements and
-build results, see [IMPLEMENTATION.md](IMPLEMENTATION.md). D0 compilation is
-currently blocked on missing native build tools. The historical outline below
+build results, see [IMPLEMENTATION.md](IMPLEMENTATION.md). D0 x64 Debug and
+Release reference builds now pass. The historical outline below
 is supplemented by that reproducible workflow.
 
 The current Visual Studio/.NET Harmonia app is **not itself a driver**. SysVAD is C++ and uses the Windows Driver Kit (WDK).

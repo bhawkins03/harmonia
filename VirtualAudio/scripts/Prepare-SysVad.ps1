@@ -15,11 +15,11 @@ if (Test-Path $Destination) {
     $dirty = & git -C $Destination status --porcelain
     if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Reference checkout must be clean.' }
 } else {
-    Invoke-Git @('clone', '--filter=blob:none', '--no-checkout', $pin.repository, $Destination)
+    Invoke-Git -GitArgs @('clone', '--filter=blob:none', '--no-checkout', $pin.repository, $Destination)
 }
-Invoke-Git @('-C', $Destination, 'sparse-checkout', 'set', 'audio/sysvad')
-Invoke-Git @('-C', $Destination, 'checkout', '--detach', $pin.commit)
-Invoke-Git @('-C', $Destination, 'submodule', 'update', '--init', '--recursive', '--', 'wil')
+Invoke-Git -GitArgs @('-C', $Destination, 'sparse-checkout', 'set', 'audio/sysvad')
+Invoke-Git -GitArgs @('-C', $Destination, 'checkout', '--detach', $pin.commit)
+Invoke-Git -GitArgs @('-C', $Destination, 'submodule', 'update', '--init', '--recursive', '--', 'wil')
 $wil = & git -C (Join-Path $Destination 'wil') rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $wil -ne $pin.wilCommit) { throw 'WIL pin mismatch.' }
 Write-Output "Prepared unmodified SysVAD at $Destination ($($pin.commit)). Nothing installed."
