@@ -2,7 +2,8 @@ name: Build Harmonia Lite (portable EXE)
 
 on:
   push:
-    branches: [feature/lite-suite-editions]
+    branches: [main, feature/lite-logo-release]
+    tags: ['v*-lite-preview']
     paths:
       - '**/*.cs'
       - '**/*.csproj'
@@ -75,9 +76,12 @@ jobs:
   publish-preview:
     name: Publish Lite preview to Releases
     needs: lite
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/lite-suite-editions'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - name: Check out release version
+        uses: actions/checkout@v4
+
       - name: Download tested Lite ZIP
         uses: actions/download-artifact@v4
         with:
@@ -87,18 +91,20 @@ jobs:
       - name: Verify release file
         run: test -s release/Harmonia-Lite-win-x64.zip
 
-      - name: Publish prerelease (one-time version)
+      - name: Publish tagged Lite release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-          if gh release view v0.1.0-lite-preview >/dev/null 2>&1; then
+          VERSION=$(grep -oP "(?<=<Version>)[^<]+" Harmonia.csproj)
+          TAG="v${VERSION}-lite-preview"
+          if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Preview release already exists; not overwriting an existing build."
             exit 0
           fi
-          gh release create v0.1.0-lite-preview release/Harmonia-Lite-win-x64.zip \
+          gh release create "$TAG" release/Harmonia-Lite-win-x64.zip \
             --target "$GITHUB_SHA" \
-            --title "Harmonia Lite v0.1.0 — Preview" \
+            --title "Harmonia Lite $TAG — Preview" \
             --notes "Portable, driverless Windows x64 preview. Download Harmonia-Lite-win-x64.zip, extract and run Harmonia.exe. No PowerShell, Git, Visual Studio, or separate .NET installation needed. Uses the experimental WASAPI loopback backend; no virtual playback driver, no native 5.1 input guarantee, and independent output clocks can drift. This is an unsigned early preview, not a production-ready release. Harmonia Suite remains in kernel-driver development and is not included." \
             --prerelease

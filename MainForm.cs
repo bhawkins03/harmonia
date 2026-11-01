@@ -32,6 +32,7 @@ internal sealed class MainForm : Form
     }
 
     private readonly AudioEngine audio = new();
+    private readonly Image brandImage;
     private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 50 };
     private readonly float[] displayLevels = new float[6];
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
@@ -74,7 +75,10 @@ internal sealed class MainForm : Form
         BackColor = Color.FromArgb(15, 19, 29);
         ForeColor = Color.WhiteSmoke;
         Font = new Font("Segoe UI", 10);
-        Icon = SystemIcons.Application;
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? "") ?? SystemIcons.Application;
+        using (var stream = typeof(MainForm).Assembly.GetManifestResourceStream("Harmonia.Assets.harmonia-logo.png")
+            ?? throw new InvalidOperationException("Harmonia logo resource missing."))
+            using (var image = new Bitmap(stream)) brandImage = new Bitmap(image);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 2, RowCount = 3 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
@@ -83,8 +87,14 @@ internal sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
         var heading = new Label { Text = "HARMONIA     /     SPEAKER CONFIGURATION", Font = new Font("Segoe UI Semibold", 19), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-        root.Controls.Add(heading, 0, 0);
-        root.SetColumnSpan(heading, 2);
+        var brandHeader = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        brandHeader.Controls.Add(new PictureBox { Image = brandImage, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(68, 68), Margin = new Padding(0, 4, 12, 0) });
+        heading.Dock = DockStyle.None;
+        heading.AutoSize = true;
+        heading.Padding = new Padding(0, 12, 0, 0);
+        brandHeader.Controls.Add(heading);
+        root.Controls.Add(brandHeader, 0, 0);
+        root.SetColumnSpan(brandHeader, 2);
 
         var leftSide = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(10) };
         var options = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 5 };
@@ -130,7 +140,7 @@ internal sealed class MainForm : Form
         menu.Items.Add("Stop routing", null, (_, _) => StopRouting());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Quit());
-        tray = new NotifyIcon { Text = "Harmonia", Icon = SystemIcons.Application, ContextMenuStrip = menu, Visible = true };
+        tray = new NotifyIcon { Text = "Harmonia Lite", Icon = Icon, ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => Restore();
 
         layout.SelectedIndexChanged += (_, _) => { if (!loading) { BuildSelectors(); SaveSelection(); map.Invalidate(); } };
@@ -416,6 +426,7 @@ internal sealed class MainForm : Form
         tray.Visible = false;
         tray.Dispose();
         audio.Dispose();
+        brandImage.Dispose();
         base.OnFormClosed(e);
     }
 }

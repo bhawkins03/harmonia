@@ -16,3 +16,6 @@ VirtualAudio/driver/**/Release/
 
 # Edition packaging output
 /dist/
+
+# Generated from supplied transparent source icon
+/Assets/harmonia.ico
