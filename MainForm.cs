@@ -29,6 +29,7 @@ internal sealed class MainForm : Form
     {
         public SpeakerLayout Layout { get; set; } = SpeakerLayout.DualStereo;
         public Dictionary<string, Dictionary<string, string>> Assignments { get; set; } = new();
+        public Dictionary<string, int[]> ChannelVolumes { get; set; } = new();
     }
 
     private readonly AudioEngine audio = new();
@@ -37,6 +38,8 @@ internal sealed class MainForm : Form
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TableLayoutPanel assignmentsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
     private readonly Dictionary<SpeakerRole, string> mappedDevices = new();
+    private readonly FlowLayoutPanel gainControls = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(0, 4, 0, 4) };
+    private readonly int[] gainPercent = [100, 100, 100, 100, 100, 100];
     private readonly Dictionary<string, string> deviceNames = new();
     private readonly FlowLayoutPanel deviceTiles = new() { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = true, FlowDirection = FlowDirection.TopDown };
     private readonly Dictionary<SpeakerRole, RectangleF> dropTargets = new();
@@ -103,8 +106,11 @@ internal sealed class MainForm : Form
         var tilesGroup = new GroupBox { Text = "AUDIO DEVICES  /  DRAG TO ASSIGN", ForeColor = GalaxyTheme.Accent, BackColor = GalaxyTheme.Background, Height = 242, Dock = DockStyle.Top, Font = new Font("Segoe UI Semibold", 9.5f) };
         tilesGroup.Controls.Add(deviceTiles);
         options.Controls.Add(tilesGroup, 0, 4);
-        options.RowCount = 6;
+        options.RowCount = 7;
         options.Controls.Add(strictInput, 0, 5);
+        var gainsGroup = new GroupBox { Text = "SPEAKER VOLUME  /  INDEPENDENT", ForeColor = GalaxyTheme.Accent, BackColor = GalaxyTheme.Background, Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(8) };
+        gainsGroup.Controls.Add(gainControls);
+        options.Controls.Add(gainsGroup, 0, 6);
         leftSide.Controls.Add(options);
         root.Controls.Add(leftSide, 0, 1);
 
@@ -191,6 +197,7 @@ internal sealed class MainForm : Form
         if (loading) return;
         settings.Layout = CurrentLayout;
         settings.Assignments[CurrentLayout.ToString()] = mappedDevices.ToDictionary(x => x.Key.ToString(), x => x.Value);
+        settings.ChannelVolumes[CurrentLayout.ToString()] = (int[])gainPercent.Clone();
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
@@ -212,6 +219,13 @@ internal sealed class MainForm : Form
         loading = true;
         try
         {
+            var values = settings.ChannelVolumes.TryGetValue(CurrentLayout.ToString(), out var savedGains) ? savedGains : Array.Empty<int>();
+            for (int i = 0; i < gainPercent.Length; i++)
+            {
+                gainPercent[i] = i < values.Length ? Math.Clamp(values[i], 0, 100) : 100;
+                audio.SetChannelGain(i, gainPercent[i] / 100f);
+            }
+            BuildGainControls();
             deviceNames.Clear();
             deviceTiles.Controls.Clear();
             var defaultId = audio.DefaultDeviceId;
@@ -237,6 +251,41 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex) { status.Text = "Device discovery failed"; MessageBox.Show(ex.Message, "Harmonia"); }
         finally { loading = false; }
+    }
+
+    private void BuildGainControls()
+    {
+        gainControls.SuspendLayout();
+        gainControls.Controls.Clear();
+        var channels = CurrentLayout switch
+        {
+            SpeakerLayout.DualStereo => new[] { 0, 1 },
+            SpeakerLayout.TripleStereoCenter => new[] { 0, 1, 2 },
+            _ => new[] { 0, 1, 2, 3, 4, 5 }
+        };
+        string[] labels = ["Front left", "Front right", "Center", "Subwoofer (LFE)", "Rear left", "Rear right"];
+        foreach (int channel in channels)
+        {
+            var row = new TableLayoutPanel { Width = 325, Height = 52, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 2, 0, 2) };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 80));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            var caption = new Label { Text = labels[channel], AutoSize = true, ForeColor = GalaxyTheme.Text };
+            var percent = new Label { Text = gainPercent[channel] + "%", TextAlign = ContentAlignment.MiddleRight, Dock = DockStyle.Fill, ForeColor = GalaxyTheme.Muted };
+            var slider = new TrackBar { Minimum = 0, Maximum = 100, Value = gainPercent[channel], TickStyle = TickStyle.None, Dock = DockStyle.Fill, AutoSize = false, Height = 24, BackColor = GalaxyTheme.Background, AccessibleName = labels[channel] + " volume" };
+            row.Controls.Add(caption, 0, 0);
+            row.Controls.Add(percent, 1, 0);
+            row.Controls.Add(slider, 0, 1);
+            row.SetColumnSpan(slider, 2);
+            slider.ValueChanged += (_, _) =>
+            {
+                gainPercent[channel] = slider.Value;
+                percent.Text = slider.Value + "%";
+                audio.SetChannelGain(channel, slider.Value / 100f);
+                SaveSelection();
+            };
+            gainControls.Controls.Add(row);
+        }
+        gainControls.ResumeLayout();
     }
 
     private SpeakerRole? HitTestRole(Point location)
