@@ -76,9 +76,12 @@ jobs:
   publish-preview:
     name: Publish Lite preview to Releases
     needs: lite
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && endsWith(github.ref, '-lite-preview')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - name: Check out release version
+        uses: actions/checkout@v4
+
       - name: Download tested Lite ZIP
         uses: actions/download-artifact@v4
         with:
@@ -94,7 +97,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION=$(grep -oP "(?<=<Version>)[^<]+" Harmonia.csproj)
+          TAG="v${VERSION}-lite-preview"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Preview release already exists; not overwriting an existing build."
             exit 0
