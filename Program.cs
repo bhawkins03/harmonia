@@ -8,6 +8,10 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+#if HARMONIA_LITE
         Application.Run(new LiteForm());
+#else
+        Application.Run(new MainForm());
+#endif
     }
 }
