@@ -1,0 +1,73 @@
+name: Build Harmonia Lite (portable EXE)
+
+on:
+  push:
+    branches: [feature/lite-suite-editions]
+    paths:
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '.github/workflows/build-lite.yml'
+      - 'scripts/**'
+  pull_request:
+    paths:
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '.github/workflows/build-lite.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lite:
+    runs-on: windows-latest
+    steps:
+      - name: Check out Harmonia
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish portable, self-contained Lite EXE
+        shell: pwsh
+        run: |
+          dotnet publish Harmonia.csproj -c Release -r win-x64 --self-contained true -o Lite-Output -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -p:IncludeNativeLibrariesForSelfExtract=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path 'Lite-Output/Harmonia.exe')) { throw 'Lite executable missing' }
+          if (Get-ChildItem Lite-Output -Include '*.sys','*.inf','*.cat' -Recurse) { throw 'Driver files in Lite output' }
+
+      - name: Add quick-start instructions
+        shell: pwsh
+        run: |
+          @'
+          HARMONIA LITE - PORTABLE PREVIEW
+
+          Double-click Harmonia.exe on Windows 10/11 x64.
+          No Git, PowerShell, developer tools or separate .NET runtime needed.
+          No driver or administrator setup required.
+
+          Audio still uses WASAPI loopback of the Windows default playback device.
+          Assign DIFFERENT physical output endpoints; a selected output must not
+          also be the captured default endpoint. Real native 5.1 virtual capture
+          is not part of this Lite preview. Multi-device clock drift is possible.
+          The program can continue running in the Windows notification area.
+          To exit completely, right-click its tray icon and choose Exit.
+
+          This is an experimental build, not a signed release.
+          Windows SmartScreen may warn about an unsigned app.
+          Do not disable security protections; use only if you trust the source.
+          '@ | Set-Content 'Lite-Output/README-FIRST.txt'
+
+      - name: Archive Lite
+        shell: pwsh
+        run: Compress-Archive -Path 'Lite-Output/*' -DestinationPath 'Harmonia-Lite-win-x64.zip'
+
+      - name: Upload downloadable preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: Harmonia-Lite-win-x64
+          path: Harmonia-Lite-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30
