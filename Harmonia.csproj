@@ -31,7 +31,7 @@
     <Compile Remove="LiteUpdates.cs" />
   </ItemGroup>
   <PropertyGroup Condition="'$(LiteEdition)' != 'true'">
-    <Version>0.3.0</Version><AssemblyVersion>$(Version).0</AssemblyVersion>
+    <Version Condition="'$(LiteEdition)' != 'true'">0.3.0</Version><AssemblyVersion>$(Version).0</AssemblyVersion>
   </PropertyGroup>
   <Target Name="GenerateHarmoniaIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="powershell.exe -NoProfile -File &quot;$(MSBuildProjectDirectory)\scripts\Generate-LiteIcon.ps1&quot;" />
