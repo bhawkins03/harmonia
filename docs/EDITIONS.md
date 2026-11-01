@@ -29,6 +29,14 @@ user-mode audio service. The driver does not yet provide a working virtual
 sound output. Do not label an unsigned development archive a public Suite
 release.
 
+## Friend-friendly download
+
+When the automated preview release succeeds, Lite can be downloaded from the
+[Releases page](https://github.com/bhawkins03/harmonia/releases) as
+`Harmonia-Lite-win-x64.zip`. Extract and run `Harmonia.exe`; no SDK, Git,
+PowerShell or separate .NET runtime is required. This is a portable unsigned
+preview, not an installer. Suite has no user-ready release yet.
+
 ## Development packaging
 
 From the repo root on Windows with the .NET 8 SDK:
