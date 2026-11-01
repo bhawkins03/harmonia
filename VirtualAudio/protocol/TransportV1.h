@@ -38,29 +38,29 @@ struct Message {
     StreamState State{};
     u32 FrameCount{}, RequestedFrames{}, PayloadBytes{}, QueueCapacity{}, FeatureBits{}, FormatCount{};
 };
-inline void Put(u8* p, usize offset, u64 value, usize width) noexcept {
+constexpr void Put(u8* p, usize offset, u64 value, usize width) noexcept {
     for (usize i = 0; i < width; ++i) p[offset + i] = static_cast<u8>(value >> (8 * i));
 }
-inline u64 Get(const u8* p, usize offset, usize width) noexcept {
+constexpr u64 Get(const u8* p, usize offset, usize width) noexcept {
     u64 value = 0;
     for (usize i = 0; i < width; ++i) value |= static_cast<u64>(p[offset + i]) << (8 * i);
     return value;
 }
-inline bool Zero(const u8* p, usize start, usize end) noexcept {
+constexpr bool Zero(const u8* p, usize start, usize end) noexcept {
     for (usize i = start; i < end; ++i) if (p[i]) return false;
     return true;
 }
-inline bool ValidFormat(const Message& m) noexcept {
+constexpr bool ValidFormat(const Message& m) noexcept {
     return m.SampleFormat == 1 && harmonia::IsSupportedFormat(m.SampleRate, m.Channels, m.SpeakerMask, 32, true) && m.FrameBytes == m.Channels * 4;
 }
-inline bool EmptyFormat(const Message& m) noexcept {
+constexpr bool EmptyFormat(const Message& m) noexcept {
     return !(m.SampleRate || m.SampleFormat || m.Channels || m.SpeakerMask || m.FrameBytes);
 }
-inline bool EmptySnapshot(const Message& m) noexcept {
+constexpr bool EmptySnapshot(const Message& m) noexcept {
     return !(m.Generation || m.Sequence || m.FirstFrame || m.Qpc || m.QpcFrequency || m.OverflowFrames ||
         m.DisconnectedFrames || m.TimingLostFrames || m.Flags || m.FrameCount) && m.State == StreamState::Idle && EmptyFormat(m);
 }
-inline bool ValidCapabilities(const u8* p, usize n) noexcept {
+constexpr bool ValidCapabilities(const u8* p, usize n) noexcept {
     if (!p || n != 48) return false;
     constexpr u16 channels[] = { 2, 6, 6 };
     constexpr u32 masks[] = { 3, 0x60f, 0x3f };
@@ -71,7 +71,7 @@ inline bool ValidCapabilities(const u8* p, usize n) noexcept {
     }
     return true;
 }
-inline bool Validate(const Message& m, const u8* payload, usize n) noexcept {
+constexpr bool Validate(const Message& m, const u8* payload, usize n) noexcept {
     const auto op = static_cast<u16>(m.Op);
     if (op < 1 || op > 5 || (m.Type != Kind::Request && m.Type != Kind::Response) ||
         static_cast<u32>(m.Result) > 9 || static_cast<u16>(m.State) > 5 ||
@@ -102,7 +102,7 @@ inline bool Validate(const Message& m, const u8* payload, usize n) noexcept {
         m.FrameCount >= 1 && m.FrameCount <= MaxFrames && n == m.FrameCount * m.FrameBytes &&
         m.FirstFrame <= (~u64(0)) - m.FrameCount;
 }
-inline bool ValidMessage(const Message& m, const u8* p, usize n) noexcept {
+constexpr bool ValidMessage(const Message& m, const u8* p, usize n) noexcept {
     if (m.Type == Kind::Request && m.Op == Operation::ReadFrames) {
         if (!m.Session || !m.Generation || m.RequestedFrames < 1 || m.RequestedFrames > MaxFrames) return false;
         Message copy = m;
@@ -111,7 +111,7 @@ inline bool ValidMessage(const Message& m, const u8* p, usize n) noexcept {
     }
     return Validate(m,p,n);
 }
-inline bool ValidReply(const Message& request, const Message& reply, const u8* payload, usize n) noexcept {
+constexpr bool ValidReply(const Message& request, const Message& reply, const u8* payload, usize n) noexcept {
     if (!ValidMessage(request,nullptr,0) || !ValidMessage(reply,payload,n) ||
         request.Type != Kind::Request || reply.Type != Kind::Response || request.Op != reply.Op) return false;
     if (request.Op != Operation::Attach && reply.Session != request.Session) return false;
@@ -120,7 +120,7 @@ inline bool ValidReply(const Message& request, const Message& reply, const u8* p
         (reply.Generation == request.Generation && reply.FrameCount <= request.RequestedFrames);
 }
 // Functions below are generated field-by-field from the documented offsets.
-inline bool Encode(const Message& m, const u8* payload, usize n, u8* output, usize capacity, usize& written) noexcept {
+constexpr bool Encode(const Message& m, const u8* payload, usize n, u8* output, usize capacity, usize& written) noexcept {
     written = 0;
     if (!output || !ValidMessage(m,payload,n) || capacity < HeaderBytes + n) return false;
     // Input payload and output must not overlap. Caller retains both buffers.
@@ -155,7 +155,7 @@ inline bool Encode(const Message& m, const u8* payload, usize n, u8* output, usi
     written = HeaderBytes+n;
     return true;
 }
-inline bool Decode(const u8* input, usize length, Message& result, const u8*& payload) noexcept {
+constexpr bool Decode(const u8* input, usize length, Message& result, const u8*& payload) noexcept {
     result = {}; payload = nullptr;
     if (!input || length < HeaderBytes || length > MaxMessage || Get(input,0,4) != Magic ||
         Get(input,4,2) != Version || Get(input,6,2) != HeaderBytes || Get(input,8,4) != length || !Zero(input,136,160)) return false;
