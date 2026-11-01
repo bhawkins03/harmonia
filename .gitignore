@@ -8,3 +8,8 @@ obj/
 *.dll
 *.zip
 *.log
+VirtualAudio/.work/
+VirtualAudio/driver/**/x64/
+VirtualAudio/driver/**/ARM64/
+VirtualAudio/driver/**/Debug/
+VirtualAudio/driver/**/Release/
