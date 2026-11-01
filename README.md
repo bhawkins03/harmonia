@@ -4,9 +4,17 @@ Harmonia is an open-source Windows audio-routing project. The **audio-driver
 architecture on `main` is the official development baseline** going forward.
 It combines a native virtual playback driver with a C# Windows desktop app.
 
-The minimal driver builds, but the driver-to-app audio transport is not yet
-implemented. The driver currently discards playback audio. It is unsigned,
-uninstalled, and has not been runtime-tested; this is a development build.
+The main development build includes the D2.2 bounded kernel PCM queue and secured v1 control interface,
+plus C++/C# protocol tests. The driver is unsigned, uninstalled, and has not been
+runtime-tested. Export fails closed without positively verified rights and fresh
+packet commits. The desktop app does not consume this transport yet.
+See [D2.2 audit and limitations](VirtualAudio/D2_2_AUDIT.md),
+[validation status](VirtualAudio/D2_2_STATUS.md), and
+[the approved security policy](VirtualAudio/D2_SECURITY.md).
+
+All further development and driver/runtime testing will take place in a VM.
+See the [VM handoff](VirtualAudio/VM_HANDOFF.md) for setup, build commands and
+remaining validation. Promotion to main does not establish working audio export.
 
 ## Official build
 
@@ -19,10 +27,11 @@ From the repository root:
 ```powershell
 ./Build.ps1
 ./Build.ps1 -Configuration Debug
+./Build.ps1 -Configuration Release -Analyze
 ```
 
 The default Release build compiles the desktop app, compiles the native format
-policy tests, and builds/validates the unsigned x64 driver package. It does not
+policy and C++/C# transport tests, and builds/validates the unsigned x64 driver package. It does not
 install the driver, add certificates, or change Windows audio settings.
 
 App output: `bin/Release/net8.0-windows/`.
@@ -40,7 +49,7 @@ Build logs and metadata are under ignored `VirtualAudio/.work/logs/`.
 See [D1 validation and limitations](VirtualAudio/D1_STATUS.md) and the
 [driver implementation plan](VirtualAudio/IMPLEMENTATION.md).
 
-Next: secure, bounded PCM transport to the app, routing-engine integration,
+Next: signed isolated-environment transport validation, service/client and routing integration,
 Windows audio/runtime validation, and signing/installation packaging.
 
 ## Desktop app

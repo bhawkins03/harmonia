@@ -4,12 +4,38 @@
 #include "simple.h"
 #include "minwavert.h"
 #include "minwavertstream.h"
+#include "../HarmoniaTransport.h"
 #include "UnittestData.h"
 #include "AudioModuleHelper.h"
 #define MINWAVERTSTREAM_POOLTAG 'SRWM'
 
 #pragma warning (disable : 4127)
 
+#pragma code_seg()
+// PASSIVE_LEVEL lifecycle calls serialize timer/buffer replacement. Neither
+// the DPC nor the transport/control lock ever waits for this mutex.
+class HarmoniaLifecycleGuard {
+    KMUTEX* mutex;
+public:
+    _IRQL_requires_(PASSIVE_LEVEL) explicit HarmoniaLifecycleGuard(KMUTEX* value):mutex(value) {
+        KeWaitForSingleObject(mutex,Executive,KernelMode,FALSE,nullptr);
+    }
+    _IRQL_requires_(PASSIVE_LEVEL) ~HarmoniaLifecycleGuard() {KeReleaseMutex(mutex,FALSE);}
+};
+
+#pragma code_seg()
+void CMiniportWaveRTStream::QuiesceTransport()
+{
+    NT_ASSERT(KeGetCurrentIrql()==PASSIVE_LEVEL);
+    if (!m_TransportInitialized) return;
+    HarmoniaTransportEnd(this);
+    KIRQL old;KeAcquireSpinLock(&m_PositionSpinLock,&old);
+    m_TransportBufferReady=false;m_TransportExportEligible=false;m_TransportWindow.Reset();m_KsState=KSSTATE_STOP;
+    PEX_TIMER timer=m_pNotificationTimer;m_pNotificationTimer=nullptr;
+    KeReleaseSpinLock(&m_PositionSpinLock,old);
+    if(timer) ExDeleteTimer(timer,TRUE,TRUE,nullptr);
+    KeFlushQueuedDpcs();
+}
 //=============================================================================
 // CMiniportWaveRTStream
 //=============================================================================
@@ -35,6 +61,7 @@ Return Value:
 --*/
 {
     PAGED_CODE();
+    QuiesceTransport();
     if (NULL != m_pMiniport)
     {
         if (m_pAudioModules)
@@ -89,22 +116,6 @@ Return Value:
         ExFreePoolWithTag( m_pWfExt, MINWAVERTSTREAM_POOLTAG );
         m_pWfExt = NULL;
     }
-    if (m_pNotificationTimer)
-    {
-        ExDeleteTimer
-        (
-            m_pNotificationTimer, 
-            TRUE, // Cancel the timer if it is currently set.
-            TRUE, // Wait for the timer to finish expiring and for any callback to a ExTimerCallback routine to finish.
-            NULL
-         );
-    }
-
-    // Since we just cancelled the notification timer, wait for all queued 
-    // DPCs to complete before we free the notification DPC.
-    //
-    KeFlushQueuedDpcs();
-
 #ifdef SYSVAD_BTH_BYPASS
     ASSERT(m_SidebandOpen == FALSE);
     ASSERT(m_SidebandStarted == FALSE);
@@ -271,6 +282,8 @@ Return Value:
 
     // Initialize the spinlock to synchronize position updates
     KeInitializeSpinLock(&m_PositionSpinLock);
+    KeInitializeMutex(&m_TransportLifecycle,0);
+    m_TransportInitialized = true;
 
     m_pNotificationTimer = ExAllocateTimer(
          TimerNotifyRT,
@@ -422,6 +435,7 @@ Return Value:
     if (NT_SUCCESS(ntStatus))
     {
         m_bUnregisterStream = TRUE;
+        if (!m_bCapture) HarmoniaTransportBegin(this,m_pWfExt->Format.nChannels,m_pWfExt->dwChannelMask);
     }
 
     return ntStatus;
@@ -519,8 +533,10 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
 )
 {
     PAGED_CODE();
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
 
     ULONG ulBufferDurationMs = 0;
+    if (!m_pNotificationTimer) {m_pNotificationTimer=ExAllocateTimer(TimerNotifyRT,this,EX_TIMER_HIGH_RESOLUTION);if(!m_pNotificationTimer)return STATUS_INSUFFICIENT_RESOURCES;}
 
     if ( (0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign) )
     { 
@@ -533,6 +549,7 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
     }
 
     RequestedSize_ -= RequestedSize_ % (m_pWfExt->Format.nBlockAlign);
+    if (RequestedSize_ % NotificationCount_ || (RequestedSize_ / NotificationCount_) % m_pWfExt->Format.nBlockAlign) return STATUS_INVALID_PARAMETER;
     
 
 
@@ -563,9 +580,13 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
     //  A WaveRT miniport driver should not require software access to the audio buffer itself."
     //   
     m_pDmaBuffer = (BYTE*)m_pPortStream->MapAllocatedPages(pBufferMdl, MmCached);
+    if (!m_pDmaBuffer) {m_pPortStream->FreePagesFromMdl(pBufferMdl);return STATUS_INSUFFICIENT_RESOURCES;}
     m_ulNotificationsPerBuffer = NotificationCount_;
+    m_TransportBufferReady = (m_pDmaBuffer != nullptr);
+    m_TransportWindow.Reset();
+    if (!m_bCapture) HarmoniaTransportBegin(this,m_pWfExt->Format.nChannels,m_pWfExt->dwChannelMask);
     m_ulDmaBufferSize = RequestedSize_;
-    ulBufferDurationMs = (RequestedSize_ * 1000) / m_ulDmaMovementRate;
+    ulBufferDurationMs = static_cast<ULONG>((static_cast<ULONGLONG>(RequestedSize_) * 1000) / m_ulDmaMovementRate);
     m_ulNotificationIntervalMs = ulBufferDurationMs / NotificationCount_;
 
     *AudioBufferMdl_ = pBufferMdl;
@@ -587,6 +608,9 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
     UNREFERENCED_PARAMETER(Size_);
 
     PAGED_CODE();
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
+
+    QuiesceTransport();
 
     if (Mdl_ != NULL)
     {
@@ -736,6 +760,9 @@ _In_        ULONG       Size_
     UNREFERENCED_PARAMETER(Size_);
 
     PAGED_CODE();
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
+
+    QuiesceTransport();
 
     if (Mdl_ != NULL)
     {
@@ -764,6 +791,8 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 )
 {
     PAGED_CODE();
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
+    if (!m_pNotificationTimer) {m_pNotificationTimer=ExAllocateTimer(TimerNotifyRT,this,EX_TIMER_HIGH_RESOLUTION);if(!m_pNotificationTimer)return STATUS_INSUFFICIENT_RESOURCES;}
 
     if ((0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign))
     {
@@ -799,7 +828,11 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
     //  A WaveRT miniport driver should not require software access to the audio buffer itself."
     //   
     m_pDmaBuffer = (BYTE*)m_pPortStream->MapAllocatedPages(pBufferMdl, MmCached);
+    if (!m_pDmaBuffer) {m_pPortStream->FreePagesFromMdl(pBufferMdl);return STATUS_INSUFFICIENT_RESOURCES;}
 
+    m_TransportBufferReady = (m_pDmaBuffer != nullptr);
+    m_TransportWindow.Reset();
+    if (!m_bCapture) HarmoniaTransportBegin(this,m_pWfExt->Format.nChannels,m_pWfExt->dwChannelMask);
     m_ulDmaBufferSize = RequestedSize_;
     m_ulNotificationsPerBuffer = 0;
 
@@ -982,6 +1015,7 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
     _In_ ULONG      EosPacketLength
 )
 {
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
     NTSTATUS ntStatus;
 
     // The call must be from event driven mode
@@ -990,6 +1024,8 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
         return STATUS_NOT_SUPPORTED;
     }
 
+    if (Flags & ~KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM) return STATUS_INVALID_PARAMETER;
+    if ((Flags & KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM) && EosPacketLength % m_pWfExt->Format.nBlockAlign) return STATUS_INVALID_PARAMETER;
     ULONG oldLastOsWritePacket = m_ulLastOsWritePacket;
 
     // This function should not be called once EoS has been set.
@@ -1002,13 +1038,14 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
     // 1-based count of completed packets, 0-based packet number of current packet
     LONGLONG currentPacket = m_llPacketCounter;
+    const bool wasRunning = (m_KsState == KSSTATE_RUN);
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
     // If not running, the current packet hasn't actually started transfering so OS should be writing
     // to the current packet. If running, then the current packing is already transfering to hardware
     // so the OS should write the packet after the current packet.
     ULONG expectedPacket = LODWORD(currentPacket);
-    if (m_KsState == KSSTATE_RUN)
+    if (wasRunning)
     {
         expectedPacket++;
     }
@@ -1062,6 +1099,17 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
         m_ulLastOsWritePacket = oldLastOsWritePacket;
     }
 
+    if (NT_SUCCESS(ntStatus)) {
+        // The commit boundary is published by the OS at PASSIVE_LEVEL, not
+        // inferred from the circular write cursor. Extend the checked packet.
+        KeAcquireSpinLock(&m_PositionSpinLock,&oldIrql);
+        ULONGLONG fullPacket=static_cast<ULONGLONG>(currentPacket)+(wasRunning?1:0);
+        ULONG validBytes=(Flags&KSSTREAM_HEADER_OPTIONSF_ENDOFSTREAM)?EosPacketLength:packetSize;
+        if (m_TransportExportEligible && wasRunning == (m_KsState == KSSTATE_RUN) && packetSize && fullPacket <= (MAXULONGLONG-validBytes)/packetSize) {
+            m_TransportWindow.Commit(fullPacket*packetSize,validBytes,m_pWfExt->Format.nBlockAlign);
+        } else m_TransportWindow.Reset();
+        KeReleaseSpinLock(&m_PositionSpinLock,oldIrql);
+    }
     return ntStatus;
 }
 
@@ -1123,6 +1171,10 @@ NTSTATUS CMiniportWaveRTStream::SetState
     _In_    KSSTATE State_
 )
 {
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
+    if (State_ == m_KsState) return STATUS_SUCCESS;
+    if (State_ == KSSTATE_RUN && (!m_TransportBufferReady || !m_pNotificationTimer)) return STATUS_INVALID_DEVICE_STATE;
+    if (!m_bCapture && State_ != KSSTATE_RUN) HarmoniaTransportRun(this,false,State_ == KSSTATE_PAUSE);
     NTSTATUS        ntStatus        = STATUS_SUCCESS;
     PADAPTERCOMMON  pAdapterComm    = m_pMiniport->GetAdapterCommObj();
     KIRQL oldIrql;
@@ -1167,6 +1219,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
 #endif // defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
             }
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+            m_TransportWindow.Reset();
             // Reset DMA
             m_llPacketCounter = 0;
             m_ullPlayPosition = 0;
@@ -1309,6 +1362,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             {
                 m_pMiniport->m_KeywordDetector.Run();
             }
+            if (!m_bCapture) HarmoniaTransportRun(this,true);
             ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
             m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
 
@@ -1331,7 +1385,10 @@ NTSTATUS CMiniportWaveRTStream::SetState
             break;
     }
 
+    KeAcquireSpinLock(&m_PositionSpinLock,&oldIrql);
     m_KsState = State_;
+    if (State_ != KSSTATE_RUN) m_TransportWindow.Reset();
+    KeReleaseSpinLock(&m_PositionSpinLock,oldIrql);
 
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
 Done:
@@ -1363,6 +1420,7 @@ VOID CMiniportWaveRTStream::UpdatePosition
     _In_ LARGE_INTEGER ilQPC
 )
 {
+    if (!m_TransportBufferReady || !m_pDmaBuffer || !m_ulDmaBufferSize) return;
     // Convert ticks to 100ns units.
     LONGLONG  hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ilQPC);
     
@@ -1371,7 +1429,9 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // may cause us to lose some of the time, so we will carry the remainder forward 
     // to the next GetPosition() call.
     //
-    ULONG TimeElapsedInMS = (ULONG)(hnsCurrentTime - m_ullDmaTimeStamp + m_hnsElapsedTimeCarryForward)/10000;
+    if(hnsCurrentTime < static_cast<LONGLONG>(m_ullDmaTimeStamp) || !m_ulDmaMovementRate) {HarmoniaTransportRevoke(this);return;}
+    ULONGLONG TimeElapsedInMS = static_cast<ULONGLONG>(hnsCurrentTime - m_ullDmaTimeStamp + m_hnsElapsedTimeCarryForward)/10000;
+    if(TimeElapsedInMS > (MAXULONGLONG-m_byteDisplacementCarryForward)/m_ulDmaMovementRate) {HarmoniaTransportRevoke(this);return;}
     
     // Carry forward the remainder of this division so we don't fall behind with our position too much.
     //
@@ -1383,16 +1443,17 @@ VOID CMiniportWaveRTStream::UpdatePosition
     //
     // need to divide by 1000 because m_ulDmaMovementRate is average bytes per sec.
 
-    ULONG ByteDisplacement = ((m_ulDmaMovementRate * TimeElapsedInMS) + m_byteDisplacementCarryForward) / 1000 ;
-    m_byteDisplacementCarryForward = ((m_ulDmaMovementRate * TimeElapsedInMS) + m_byteDisplacementCarryForward) % 1000;
+    ULONGLONG ByteDisplacement = ((static_cast<ULONGLONG>(m_ulDmaMovementRate) * TimeElapsedInMS) + m_byteDisplacementCarryForward) / 1000;
+    m_byteDisplacementCarryForward = static_cast<ULONG>(((static_cast<ULONGLONG>(m_ulDmaMovementRate) * TimeElapsedInMS) + m_byteDisplacementCarryForward) % 1000);
 
     // Increment presentation position even after last buffer is rendered.
+    if(ByteDisplacement > MAXULONGLONG-m_ullLinearPosition || ByteDisplacement > MAXULONGLONG-m_ullPresentationPosition) {HarmoniaTransportRevoke(this);return;}
     m_ullPresentationPosition += ByteDisplacement;
 
     if (m_bCapture)
     {
         // Write sine wave to buffer.
-        WriteBytes(ByteDisplacement);
+        WriteBytes(static_cast<ULONG>(min(ByteDisplacement,MAXULONG)));
     }
     else
     {
@@ -1474,13 +1535,27 @@ ByteDisplacement - # of bytes to process.
 }
 
 #pragma code_seg()
-VOID CMiniportWaveRTStream::ReadBytes(_In_ ULONG ByteDisplacement)
+VOID CMiniportWaveRTStream::ReadBytes(_In_ ULONGLONG ByteDisplacement)
 {
-    // D1 consumes audio without exporting it. D2 adds bounded transport here.
-    UNREFERENCED_PARAMETER(ByteDisplacement);
+    // Called with PositionSpinLock held, before new DMA position is published.
+    const ULONG stride=m_pWfExt->Format.nBlockAlign;
+    const ULONGLONG frames=ByteDisplacement/stride;
+    const bool valid=m_TransportExportEligible && m_TransportWindow.Contains(m_ullLinearPosition,ByteDisplacement,
+        m_ulDmaBufferSize,static_cast<USHORT>(stride),m_ulNotificationsPerBuffer != 0);
+    LARGE_INTEGER frequency;
+    const ULONGLONG now=static_cast<ULONGLONG>(KeQueryPerformanceCounter(&frequency).QuadPart);
+    // Timestamp of first consumed frame, conservatively estimated from the
+    // interval ending now. Never claim exact hardware correlation.
+    ULONGLONG first=now;
+    if (frames<=480 && frequency.QuadPart>0 && static_cast<ULONGLONG>(frequency.QuadPart)<=MAXULONGLONG/480) {
+        const ULONGLONG span=frames*static_cast<ULONGLONG>(frequency.QuadPart)/48000;
+        if(now>=span) first=now-span;
+    }
+    HarmoniaTransportConsume(this,m_pDmaBuffer,m_ulDmaBufferSize,
+        static_cast<ULONG>(m_ullLinearPosition%m_ulDmaBufferSize),frames,valid,first);
 }
 //=============================================================================
-#pragma code_seg("PAGE")
+#pragma code_seg()
 STDMETHODIMP_(NTSTATUS) 
 CMiniportWaveRTStream::SetContentId
 (
@@ -1505,12 +1580,17 @@ Return Value:
 
 --*/
 {
-    PAGED_CODE();
+    NT_ASSERT(KeGetCurrentIrql()==PASSIVE_LEVEL);
 
     DPF_ENTER(("[CMiniportWaveRT::SetContentId]"));
 
+    HarmoniaLifecycleGuard lifecycle(&m_TransportLifecycle);
+    KIRQL rightsIrql;KeAcquireSpinLock(&m_PositionSpinLock,&rightsIrql);
+    m_TransportExportEligible=false;m_TransportWindow.Reset();
+    KeReleaseSpinLock(&m_PositionSpinLock,rightsIrql);
     NTSTATUS    ntStatus;
-    ULONG       ulOldContentId = contentId;
+    ULONG       ulOldContentId = m_ulContentId;
+    const ULONGLONG exportTicket = HarmoniaTransportRevoke(this);
 
     m_ulContentId = contentId;
 
@@ -1531,8 +1611,14 @@ Return Value:
     // SYSVAD writes each stream seperately to disk. If the rights for this
     // stream indicates that the stream is CopyProtected, stop writing to disk.
     //
-    UNREFERENCED_PARAMETER(drmRights);
-    // No PCM leaves this driver in D1; retain the PortCls DRM bookkeeping.
+    DRMRIGHTS verified{};
+    const bool eligible=NT_SUCCESS(ntStatus) && drmRights && !drmRights->Reserved && !drmRights->CopyProtect && !drmRights->DigitalOutputDisable &&
+        NT_SUCCESS(m_pMiniport->QueryExportRights(contentId,&verified)) && !verified.Reserved && !verified.CopyProtect && !verified.DigitalOutputDisable;
+    KeAcquireSpinLock(&m_PositionSpinLock,&rightsIrql);
+    HarmoniaTransportGrant(this,exportTicket,eligible);
+    // A fresh SetWritePacket after this boundary must establish a new floor.
+    m_TransportExportEligible=eligible;
+    KeReleaseSpinLock(&m_PositionSpinLock,rightsIrql);
 
     //
     // From MSDN:
@@ -1678,6 +1764,8 @@ TimerNotifyRT
     KIRQL oldIrql;
     KeAcquireSpinLock(&_this->m_PositionSpinLock, &oldIrql);
 
+    if (_this->m_KsState != KSSTATE_RUN || !_this->m_TransportBufferReady) {KeReleaseSpinLock(&_this->m_PositionSpinLock,oldIrql);return;}
+
     qpc = KeQueryPerformanceCounter(&qpcFrequency);
 
     // Convert ticks to 100ns units.
@@ -1706,7 +1794,10 @@ TimerNotifyRT
 
     if (!_this->m_bEoSReceived)
     {
-        _this->m_llPacketCounter++;
+        // Completed packets follow the consumed position, including delayed
+        // callbacks. Incrementing only once could publish stale packet commits.
+        ULONG packetBytes=_this->m_ulNotificationsPerBuffer?_this->m_ulDmaBufferSize/_this->m_ulNotificationsPerBuffer:0;
+        if(packetBytes) _this->m_llPacketCounter=static_cast<LONGLONG>(_this->m_ullLinearPosition/packetBytes);
     }
 
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
@@ -1780,9 +1871,3 @@ End:
     return;
 }
 //=============================================================================
-
-
-
-
-
-

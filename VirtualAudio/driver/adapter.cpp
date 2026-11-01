@@ -24,6 +24,7 @@ Abstract:
 #include <ContosoKeywordDetector.h>
 #include "IHVPrivatePropertySet.h"
 
+#include "HarmoniaTransport.h"
 #include "simple.h"
 #include "minipairs.h"
 #ifdef SYSVAD_BTH_BYPASS
@@ -339,6 +340,7 @@ Environment:
     if (gPCDriverUnloadRoutine != NULL)
     {
         gPCDriverUnloadRoutine(DriverObject);
+
     }
 
     //
@@ -349,6 +351,8 @@ Environment:
         WdfDriverMiniportUnload(WdfGetDriver());
     }
 
+
+    HarmoniaTransportUnload();
 
 Done:
     return;
@@ -588,6 +592,9 @@ Return Value:
     //
     gPCDriverUnloadRoutine = DriverObject->DriverUnload;
     DriverObject->DriverUnload = DriverUnload;
+
+    ntStatus = HarmoniaTransportInit(DriverObject);
+    IF_FAILED_JUMP(ntStatus, Done);
 
     //
     // All done.
@@ -1117,6 +1124,8 @@ Return Value:
     IF_FAILED_JUMP(ntStatus, Exit);
 #endif // _USE_SingleComponentMultiFxStates
 
+    if (NT_SUCCESS(ntStatus)) ntStatus = HarmoniaTransportStart(DeviceObject);
+
 Exit:
 
     //
@@ -1217,6 +1226,7 @@ Return Value:
     case IRP_MN_REMOVE_DEVICE:
     case IRP_MN_SURPRISE_REMOVAL:
     case IRP_MN_STOP_DEVICE:
+        HarmoniaTransportStop(_DeviceObject, stack->MinorFunction == IRP_MN_REMOVE_DEVICE);
         ext = static_cast<PortClassDeviceContext*>(_DeviceObject->DeviceExtension);
 
         if (ext->m_pCommon != NULL)
@@ -1238,6 +1248,3 @@ Return Value:
 }
 
 #pragma code_seg()
-
-
-

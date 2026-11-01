@@ -1,6 +1,8 @@
 # Harmonia Virtual Audio — Driver Design v0.1
 
-Status: architecture proposal. **No functional Windows driver is present.**
+Status: D1 render sink, D2.1 codecs and D2.2 transport source build. The driver
+is uninstalled and runtime behavior is unverified. The v1 wire contract in
+PROTOCOL.md and D2_2_AUDIT.md supersede older ABI proposals in this document.
 
 ## Goal
 
@@ -18,7 +20,7 @@ Windows Audio Engine (audiodg.exe)
 Harmonia Virtual Audio render endpoint [SysVAD-derived, signed .sys + INF]
        │  WaveRT render stream
        ▼
-Driver-owned bounded PCM transport [not implemented]
+Driver-owned bounded PCM transport [source implemented; unverified]
        │  versioned shared ring / sanctioned kernel-to-user transfer
        ▼
 Harmonia Audio Service [future standalone user-mode process]
@@ -41,7 +43,7 @@ User-mode service hosts transport consumer independently from tray UI so closing
 ## Input format proposal
 
 - v1: 48,000 Hz, interleaved IEEE-754 32-bit float PCM, 2 and 6 channels
-- optional compatibility: 16-bit integer PCM (explicit conversion at input boundary)
+- Future compatibility only: integer PCM is not supported by the v1 transport.
 - v2: 8 channels and more sample rates, with resampling in user mode
 - channel order is defined by **WAVEFORMATEXTENSIBLE** speaker mask, not simply channels count
 - 5.1 side channels: FL FR FC LFE SL SR, mask 0x60F

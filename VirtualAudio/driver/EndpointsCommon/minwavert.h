@@ -591,6 +591,7 @@ protected:
         return (m_DeviceFlags & ENDPOINT_OFFLOAD_SUPPORTED) ? TRUE : FALSE;
     }
 
+    NTSTATUS QueryExportRights(ULONG id, PDRMRIGHTS rights);
     BOOL IsSystemCapturePin(ULONG nPinId);
 
     BOOL IsCellularBiDiCapturePin(ULONG nPinId);
@@ -738,4 +739,3 @@ public:
 typedef CMiniportWaveRT *PCMiniportWaveRT;
 
 #endif // _SYSVAD_MINWAVERT_H_
-
