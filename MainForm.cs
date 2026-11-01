@@ -75,10 +75,10 @@ internal sealed class MainForm : Form
         BackColor = Color.FromArgb(15, 19, 29);
         ForeColor = Color.WhiteSmoke;
         Font = new Font("Segoe UI", 10);
-        Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? "") ?? SystemIcons.Application;
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? "") ?? SystemIcons.Application;
         using (var stream = typeof(MainForm).Assembly.GetManifestResourceStream("Harmonia.Assets.harmonia-logo.png")
             ?? throw new InvalidOperationException("Harmonia logo resource missing."))
-            brandImage = new Bitmap(stream);
+            using (var image = new Bitmap(stream)) brandImage = new Bitmap(image);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 2, RowCount = 3 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
