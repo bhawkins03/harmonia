@@ -37,6 +37,34 @@ When the automated preview release succeeds, Lite can be downloaded from the
 PowerShell or separate .NET runtime is required. This is a portable unsigned
 preview, not an installer. Suite has no user-ready release yet.
 
+## Lite updates
+
+Lite checks the official `bhawkins03/harmonia` GitHub Releases API once when
+its window first opens, if **Check for Lite updates on startup** is enabled.
+The checkbox is saved in the existing per-user
+`%LOCALAPPDATA%/Harmonia/settings.json`; it is enabled by default. Users can
+turn it off or click **Check for updates now** at any time.
+
+The check considers only newer numeric `vX.Y.Z-lite-preview` releases with
+a `Harmonia-Lite-win-x64.zip` asset. It does not check Suite or other apps.
+The user must approve the update before the application downloads the ZIP.
+A temporary helper then attempts to replace the portable `Harmonia.exe`
+after the app exits and relaunch it; no admin permissions or driver actions.
+Updates can fail if the directory is write-protected or the archive is damaged.
+Per-user speaker settings are stored separately and remain unchanged.
+
+**Security / distribution limits:** This is an unsigned preview updater;
+HTTPS/GitHub metadata and archive shape/size are checked, but the downloaded
+binary is not yet authenticated with an independent code-signing trust chain.
+Only enable it for releases you trust. Production releases should use
+Authenticode signing, SHA-256 verification and an atomic rollback-safe updater.
+The updater should undergo VM smoke tests before this feature is shipped.
+
+Maintainers must update the `<Version>` in `Harmonia.csproj` to match the
+numeric version of the GitHub release tag. Pushing an annotated tag such as
+`v0.2.0-lite-preview` triggers `.github/workflows/build-lite.yml` to
+compile and publish that release. Do not reuse existing release tags.
+
 ## Development packaging
 
 From the repo root on Windows with the .NET 8 SDK:
