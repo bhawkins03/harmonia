@@ -2,7 +2,7 @@ name: Build Harmonia Lite (portable EXE)
 
 on:
   push:
-    branches: [main, feature/lite-logo-release]
+    branches: [main, fix/lite-updater-021]
     tags: ['v*-lite-preview']
     paths:
       - '**/*.cs'

@@ -2,7 +2,7 @@
 
 ## Download Harmonia Lite
 
-**[Download Harmonia Lite v0.2.0](https://github.com/bhawkins03/harmonia/releases/tag/v0.2.0-lite)** · Windows x64 · Portable application
+**[Download Harmonia Lite v0.2.1](https://github.com/bhawkins03/harmonia/releases/tag/v0.2.1-lite)** · Windows x64 · Portable application
 
 Lite focuses on the original goal: **send stereo left and right channels
 to two separate Windows playback devices** (for example, two monitor speakers).
@@ -17,7 +17,7 @@ rear surround, synthetic upmix, speaker-map editing, or driver installation.
 Separate physical device clocks may drift. This unsigned release may prompt
 a Windows reputation warning.
 
-## Harmonia Suite
+**Update checks (v0.2.1):** Lite checks the project's GitHub Releases at startup, asks before downloading a newer Lite version, and lets you disable the automatic check or run it manually inside the app. Settings stay in your Windows user profile. This is a portable unsigned updater, not a signed installer.\n\n## Harmonia Suite
 
 Suite is the ongoing full project for a selectable Windows virtual audio
 endpoint, native multichannel audio and advanced multi-device routing.

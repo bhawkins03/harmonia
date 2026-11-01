@@ -4,8 +4,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets/harmonia.ico</ApplicationIcon>
-    <Version>0.2.0</Version>
-    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <Version>0.2.1</Version>
+    <AssemblyVersion>0.2.1.0</AssemblyVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -25,6 +25,7 @@
   <ItemGroup Condition="'$(LiteEdition)' != 'true'">
     <Compile Remove="LiteForm.cs" />
     <Compile Remove="LiteStereoEngine.cs" />
+    <Compile Remove="LiteUpdates.cs" />
   </ItemGroup>
   <Target Name="GenerateHarmoniaIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="powershell.exe -NoProfile -File &quot;$(MSBuildProjectDirectory)\scripts\Generate-LiteIcon.ps1&quot;" />
