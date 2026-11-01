@@ -1,7 +1,8 @@
 # D2 transport security proposal and permission gate
 
-D2.1 supplies wire definitions/codecs/tests only. This proposal is not approval
-to implement handlers, expose a device, or install a service. The D1 MEDIA INF
+D2.1 supplies wire definitions/codecs/tests only. The repository owner has approved source implementation of the access model
+listed below. This is **not** approval to install or expose a live device,
+install a service, certificates, or alter Windows security settings. The D1 MEDIA INF
 ACL applies to the audio endpoint and MUST NOT be reused for PCM export.
 
 ## Access proposal to review before D2.2
@@ -34,13 +35,15 @@ ACL applies to the audio endpoint and MUST NOT be reused for PCM export.
 - ACL authorization at open plus I/O-manager access bits and explicit
   IoValidateDeviceIoControlAccess (or supported equivalent) at dispatch. Bind
   the exclusive attachment to the owning file object; a guessed/copied session
-  token on a different handle must fail. Service SID—not a PID or process name—
+  token on a different handle must fail. Service SIDâ€”not a PID or process nameâ€”
   supplies the authorization boundary. Handle cleanup revokes the session.
 
-## Mandatory permission request before implementing handlers
+## Source-implementation approval recorded
 
-The next agent must present this exact concrete access proposal to the user
-and request approval **before writing any kernel IOCTL handler**:
+The user approved proceeding with all source changes needed to complete the driver,
+after reviewing the following concrete access proposal. That approval covers
+implementation of this proposed policy only; any material security-policy
+expansion requires a separate review:
 
 > May I implement the separate transport control interface with LocalSystem
 > maintenance access and read/write access restricted to the
@@ -50,10 +53,12 @@ and request approval **before writing any kernel IOCTL handler**:
 > only; service/driver installation, certificates and security-setting changes
 > remain outside the task.
 
-No such approval has been requested or granted as part of D2.1 because no
-handlers are being implemented here. General permission to build D2.1 is not
-approval of the future service identity or ACL. If the proposal changes, request
-approval of the revised concrete policy before implementing it.
+Approval was granted in the Harmonia project conversation after D2.1, before
+implementation of D2.2 handlers. No driver, service, certificate or security
+settings have been installed or modified by this documentation update. Before
+any test deployment, perform a separate installation/safety review on an
+isolated test environment. If the access model changes materially, review it
+again before implementation.
 
 ## Threat model and later acceptance tests
 
