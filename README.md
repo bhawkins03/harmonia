@@ -1,8 +1,25 @@
 # Harmonia
 
-Harmonia is planned as two editions: **Harmonia Lite** (driverless WASAPI
-loopback) and **Harmonia Suite** (full driver + service + routing, not yet
-functional). See [edition packaging and release requirements](docs/EDITIONS.md).
+## Choose an edition
+
+| Edition | For whom | Download / status |
+| --- | --- | --- |
+| **Harmonia Lite** | Friends and Windows users wanting driverless, experimental multi-device audio routing using WASAPI loopback | [Download the latest Lite preview](https://github.com/bhawkins03/harmonia/releases/tag/v0.1.0-lite-preview) (Windows x64 portable ZIP) |
+| **Harmonia Suite** | Users who want a selectable virtual Windows 5.1 render device and native discrete-channel routing | **In development — no functional public installer yet.** |
+
+**Using Lite:** Download `Harmonia-Lite-win-x64.zip`, extract it, and double-click
+`Harmonia.exe`. No Git, PowerShell, .NET SDK, or separate .NET runtime is needed
+for the self-contained build. No driver installation is required. The preview
+is unsigned, so Windows SmartScreen may warn; don't bypass warnings unless you
+trust the code and downloaded file.
+
+Lite captures the Windows default playback endpoint using WASAPI loopback,
+so that same endpoint cannot simultaneously be a routed output. It does not
+create a virtual audio device or guarantee native 5.1 input; independent output
+clocks can drift. **Suite is not yet ready for end-user use.**
+
+See [edition architecture and packaging](docs/EDITIONS.md) for what is included
+in each edition, known limitations, and release requirements.
 
 Harmonia is an open-source Windows audio-routing project. The **audio-driver
 architecture on `main` is the official development baseline** going forward.
