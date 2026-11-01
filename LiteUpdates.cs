@@ -100,8 +100,8 @@ internal static class LiteUpdates
             string helper = Path.Combine(folder, "Harmonia-Updater.exe");
             File.Copy(appFile, helper);
             var args = new[] { "--lite-apply-update", Environment.ProcessId.ToString(), candidate, appDir };
-            Process.Start(new ProcessStartInfo(helper) { UseShellExecute = false, ArgumentList = { args[0], args[1], args[2], args[3] } })
-                ?? throw new InvalidOperationException("Could not start update helper.");
+            if (Process.Start(new ProcessStartInfo(helper) { UseShellExecute = false, ArgumentList = { args[0], args[1], args[2], args[3] } }) is null)
+                throw new InvalidOperationException("Could not start update helper.");
             // Quit via the same shutdown path used by the tray Exit command.
             owner.Tag = "lite-update-close";
             owner.Close();
