@@ -4,8 +4,7 @@ param(
     [ValidateSet('Debug','Release')][string]$Configuration = 'Release',
     [ValidateSet('win-x64','win-arm64')][string]$Runtime = 'win-x64',
     [switch]$SelfContained,
-    [switch]$ExperimentalSuite,
-    [switch]$SkipBuild
+    [switch]$ExperimentalSuite
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -23,14 +22,13 @@ if (Test-Path $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Push-Location $root
 try {
-    if ($Edition -eq 'Suite' -and !$SkipBuild) {
+    if ($Edition -eq 'Suite') {
         & ./Build.ps1 -Configuration $Configuration
         if ($LASTEXITCODE -ne 0) { throw 'Suite development build failed.' }
     }
     $publishArgs = @('publish', 'Harmonia.csproj', '--configuration', $Configuration,
         '--runtime', $Runtime, '--self-contained', "$($SelfContained.IsPresent)".ToLowerInvariant(),
         '--output', (Join-Path $stage 'App'))
-    if ($SkipBuild) { $publishArgs += '--no-build' }
     & dotnet @publishArgs
     if ($LASTEXITCODE -ne 0) { throw 'App publish failed.' }
     if ($Edition -eq 'Suite') {
