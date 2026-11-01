@@ -28,6 +28,7 @@ internal sealed class MainForm : Form
     private sealed class Settings
     {
         public SpeakerLayout Layout { get; set; } = SpeakerLayout.DualStereo;
+        public bool AutoCheckUpdates { get; set; } = true;
         public Dictionary<string, Dictionary<string, string>> Assignments { get; set; } = new();
     }
 
@@ -49,6 +50,8 @@ internal sealed class MainForm : Form
     private readonly Button snapshot = new() { Text = "Audio backup", Width = 115, Height = 34 };
     private readonly Button testRearL = new() { Text = "Test rear L", Width = 105, Height = 34 };
     private readonly Button testRearR = new() { Text = "Test rear R", Width = 105, Height = 34 };
+    private readonly CheckBox autoUpdates = new() { Text = "Check for Lite updates on startup", AutoSize = true, ForeColor = Color.Gainsboro, Padding = new Padding(0, 6, 0, 3) };
+    private readonly LinkLabel checkUpdates = new() { Text = "Check for updates now", AutoSize = true, LinkColor = Color.LightSkyBlue, Padding = new Padding(0, 0, 0, 8) };
     private readonly CheckBox strictInput = new() { Text = "Diagnostic: no stereo upmix (rear silent for stereo)", AutoSize = true, ForeColor = Color.Khaki, Padding = new Padding(0, 9, 0, 8) };
     private readonly NotifyIcon tray;
     private readonly Settings settings;
@@ -104,6 +107,9 @@ internal sealed class MainForm : Form
         options.Controls.Add(tilesGroup, 0, 4);
         options.RowCount = 6;
         options.Controls.Add(strictInput, 0, 5);
+        options.RowCount = 8;
+        options.Controls.Add(autoUpdates, 0, 6);
+        options.Controls.Add(checkUpdates, 0, 7);
         leftSide.Controls.Add(options);
         root.Controls.Add(leftSide, 0, 1);
 
@@ -140,6 +146,10 @@ internal sealed class MainForm : Form
         snapshot.Click += (_, _) => ShowRecoverySnapshot();
         testRearL.Click += async (_, _) => await TestRearAsync(true);
         testRearR.Click += async (_, _) => await TestRearAsync(false);
+        autoUpdates.Checked = settings.AutoCheckUpdates;
+        autoUpdates.CheckedChanged += (_, _) => { settings.AutoCheckUpdates = autoUpdates.Checked; SaveSelection(); };
+        checkUpdates.LinkClicked += async (_, _) => await LiteUpdates.CheckAsync(this, true);
+        Shown += async (_, _) => { if (settings.AutoCheckUpdates) await LiteUpdates.CheckAsync(this, false); };
         map.Paint += DrawSpeakerMap;
         map.AllowDrop = true;
         map.DragEnter += (_, e) => { if (!audio.IsRunning && e.Data?.GetDataPresent(typeof(string)) == true) e.Effect = DragDropEffects.Move; };
@@ -188,6 +198,7 @@ internal sealed class MainForm : Form
     {
         if (loading) return;
         settings.Layout = CurrentLayout;
+        settings.AutoCheckUpdates = autoUpdates.Checked;
         settings.Assignments[CurrentLayout.ToString()] = mappedDevices.ToDictionary(x => x.Key.ToString(), x => x.Value);
         try
         {
@@ -401,6 +412,7 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (Equals(Tag, "lite-update-close")) exiting = true;
         if (!exiting && e.CloseReason == CloseReason.UserClosing)
         {
             e.Cancel = true;
