@@ -1,5 +1,9 @@
 # Harmonia
 
+Harmonia is planned as two editions: **Harmonia Lite** (driverless WASAPI
+loopback) and **Harmonia Suite** (full driver + service + routing, not yet
+functional). See [edition packaging and release requirements](docs/EDITIONS.md).
+
 Harmonia is an open-source Windows audio-routing project. The **audio-driver
 architecture on `main` is the official development baseline** going forward.
 It combines a native virtual playback driver with a C# Windows desktop app.
