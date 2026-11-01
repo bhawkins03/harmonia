@@ -1,5 +1,8 @@
 # Harmonia D1: minimal render endpoint
 
+Historical milestone report. For current transport source, see D2_2_AUDIT.md
+and D2_2_STATUS.md. Its installed-driver tests remain pending.
+
 The Harmonia-owned fork is in `VirtualAudio/driver`. It derives from Microsoft
 Windows-driver-samples commit `f4c1ff842b6a0001152f44cb61788b216a1c7627`
 (audio/sysvad); Microsoft's MIT license and copyright notices are retained.

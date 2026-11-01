@@ -1,8 +1,8 @@
 # Harmonia Virtual Audio — Driver Design v0.1
 
-Status: D1 builds a render-only sink; D2.1 implements the v1 wire codecs and
-tests. **No operational driver-to-app transport is present.** The v1 wire
-contract in PROTOCOL.md supersedes older ABI proposals in this document.
+Status: D1 render sink, D2.1 codecs and D2.2 transport source build. The driver
+is uninstalled and runtime behavior is unverified. The v1 wire contract in
+PROTOCOL.md and D2_2_AUDIT.md supersede older ABI proposals in this document.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Windows Audio Engine (audiodg.exe)
 Harmonia Virtual Audio render endpoint [SysVAD-derived, signed .sys + INF]
        │  WaveRT render stream
        ▼
-Driver-owned bounded PCM transport [not implemented]
+Driver-owned bounded PCM transport [source implemented; unverified]
        │  versioned shared ring / sanctioned kernel-to-user transfer
        ▼
 Harmonia Audio Service [future standalone user-mode process]

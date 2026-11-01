@@ -2,8 +2,10 @@
 
 This document freezes the v1 **wire encoding**, not an operational kernel API.
 C++ `protocol/TransportV1.h` and C# `protocol/TransportV1.cs` implement the same
-allocation-free codecs and validation. No device, IOCTL handler, queue, service,
-or routing backend is implemented by D2.1. See D2_CONTRACT.md for later work.
+allocation-free codecs and validation. D2.2 now integrates this unchanged wire
+encoding with a private queue and secured control device; see D2_2_AUDIT.md.
+The driver is uninstalled and runtime-unverified; no service/routing backend is
+provided. D2.1 codec conformance alone does not establish runtime safety.
 
 ## Framing and compatibility
 
@@ -120,8 +122,8 @@ or stale tokens return NotAttached. DETACH is not silently idempotent. Idle
 attach is legal; the consumer polls STATE until a nonzero generation appears.
 READ is nonblocking in v1: return available whole frames up to the requested
 limit, otherwise NoData. GenerationMismatch returns no data; poll STATE and
-reset downstream buffers. D2.2 still needs cancel-safe rundown for operations
-in flight, even though v1 defines no waiting/pending read queue.
+reset downstream buffers. D2.2 uses file-context rundown and locked transaction
+linearization; real cancel/close/removal races still require installed tests.
 
 ## Generation, sequence and timing
 
@@ -169,7 +171,8 @@ alone cannot authenticate a response or know the requested generation/limit.
 
 ## IOCTL definitions and security gate
 
-These are reserved definitions ONLY; **no kernel handlers are implemented**.
+These definitions are implemented by the D2.2 source control handlers, after
+the recorded security approval. The driver remains unsigned and uninstalled.
 DeviceType=0x8000, functions 0x800..0x804, access=FILE_READ_DATA|FILE_WRITE_DATA.
 Method is METHOD_BUFFERED for controls, METHOD_OUT_DIRECT for READ_FRAMES.
 Both languages assert the exact codes and method/access bits in tests.
@@ -182,7 +185,8 @@ Both languages assert the exact codes and method/access bits in tests.
 | STATE | 0x8000E00C |
 | DETACH | 0x8000E010 |
 
-InputBufferLength must be exactly 160 for all operations. Controls need at least
+InputBufferLength must be exactly 160 for all operations. Output capacity must
+not exceed MaxMessage (11680). Controls need at least
 160 output bytes (208 for capabilities). Reads require at least
 160 + RequestedFrames * 24 output bytes, regardless of active channel count,
 so the caller can allocate before knowing a changed format. The actual returned
@@ -192,8 +196,8 @@ for direct reads, map only the I/O-manager-owned output MDL, validate its byte
 count, never accept user addresses, and zero any returned reserved bytes.
 Any unused output capacity is not returned or decoded as part of the message.
 
-See [D2_SECURITY.md](D2_SECURITY.md) for the proposed identity/SDDL, threat model,
-and **explicit permission request required before any kernel IOCTL handlers**.
+See [D2_SECURITY.md](D2_SECURITY.md) for the approved identity/SDDL, threat model,
+and recorded source-implementation approval. Deployment is outside this task.
 Public audio endpoint access must never imply control-device permission.
 Microsoft documents the required [method/access bits](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/defining-i-o-control-codes)
 and [device namespace protection](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/controlling-device-namespace-access).

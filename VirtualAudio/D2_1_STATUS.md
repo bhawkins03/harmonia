@@ -1,5 +1,8 @@
 # D2.1 status: transport protocol v1
 
+Historical milestone report. For current transport source, see D2_2_AUDIT.md
+and D2_2_STATUS.md. Its installed-driver tests remain pending.
+
 Implemented on `feature/d2-transport-contract`, incorporating upstream contract
 commit `c9d2373`, based on official main `49315c1`.
 

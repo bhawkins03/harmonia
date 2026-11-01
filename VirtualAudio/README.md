@@ -1,14 +1,16 @@
 # Harmonia virtual audio endpoint
 
-Status: the minimal Harmonia driver fork (D1) builds in x64 Debug and Release.
-See [D1 build instructions, behavior and limitations](D1_STATUS.md).
+Status: D2.2 source includes a bounded private PCM queue, approved restricted
+control-device ACL, v1 nonblocking IOCTLs, conservative packet/rights gates and
+lifecycle handling. It builds unsigned; it is not installed or runtime-verified.
+The desktop application still uses its existing WASAPI loopback backend.
 
-The driver advertises stereo and 5.1 Float32 at 48 kHz with its own device ID,
-service, binary and INF. It is unsigned and has not been installed or runtime
-tested. It currently discards render audio; transport to the Harmonia routing
-engine remains to be implemented.
+See [D2.2 audit](D2_2_AUDIT.md), [validation/limitations](D2_2_STATUS.md),
+[wire protocol](PROTOCOL.md), and [approved security design](D2_SECURITY.md).
+No service/client or driver-to-app routing integration is supplied yet.
+Unknown rights or missing packet commits deliberately block PCM export.
 
-`driver/` contains the Harmonia-owned SysVAD fork and retained Microsoft MIT
-license. `scripts/Build-Harmonia.ps1` builds it. The pinned unmodified reference
-workflow remains available through Prepare-SysVad.ps1 and Build-SysVad.ps1.
-See [implementation sequence](IMPLEMENTATION.md) for the remaining phases.
+From the repository root, Build.ps1 runs all available tests and builds the app
+and driver. Add -Analyze for a forced static-analysis driver rebuild. Never
+interpret compilation, unit tests or offline ACL checks as installed-driver
+verification. Microsoft MIT source notices remain in driver/.

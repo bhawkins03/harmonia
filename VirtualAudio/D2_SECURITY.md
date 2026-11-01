@@ -1,9 +1,10 @@
 # D2 transport security proposal and permission gate
 
-D2.1 supplies wire definitions/codecs/tests only. The repository owner has approved source implementation of the access model
-listed below. This is **not** approval to install or expose a live device,
-install a service, certificates, or alter Windows security settings. The D1 MEDIA INF
-ACL applies to the audio endpoint and MUST NOT be reused for PCM export.
+D2.2 implements the source policy approved below on a separate named control
+device. No service/driver is installed; actual token, namespace and ACL behavior
+remain unverified. `Test-TransportSecurity.ps1` checks the compiled SDDL source
+configuration offline. It does not establish real-device access enforcement.
+The D1 MEDIA INF ACL is not reused for PCM export.
 
 ## Access proposal to review before D2.2
 

@@ -14,10 +14,10 @@ This baseline is a development milestone, not a signed runtime release.
 
 ## Next: driver audio transport (D2)
 
-- [ ] Bounded kernel PCM queue and secured user-mode control interface.
+- [x] D2.2 source: bounded kernel PCM queue and secured control interface.
 - [x] D2.1 versioned wire format, C++/C# codecs and golden-vector tests.
-- [ ] Publish live format/state changes and loss counters through D2.2 handlers.
-- [ ] Cancellation, close, disconnect, PnP removal and DRM behavior.
+- [x] D2.2 handlers for format/state, generations and loss counters (uninstalled).
+- [ ] Installed-driver verification of ACLs, cancellation, disconnect, PnP and DRM.
 
 ## Routing integration (D3/D4)
 

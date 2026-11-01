@@ -4,12 +4,13 @@ Harmonia is an open-source Windows audio-routing project. The **audio-driver
 architecture on `main` is the official development baseline** going forward.
 It combines a native virtual playback driver with a C# Windows desktop app.
 
-The minimal driver builds, but the driver-to-app audio transport is not yet
-implemented. The driver currently discards playback audio. It is unsigned,
-uninstalled, and has not been runtime-tested; this is a development build.
-The D2.1 v1 protocol codecs and cross-language tests are implemented; see
-[the wire specification](VirtualAudio/PROTOCOL.md) and
-[the security approval gate for D2.2](VirtualAudio/D2_SECURITY.md).
+This D2 branch adds a bounded kernel PCM queue and secured v1 control interface,
+plus C++/C# protocol tests. The driver is unsigned, uninstalled, and has not been
+runtime-tested. Export fails closed without positively verified rights and fresh
+packet commits. The desktop app does not consume this transport yet.
+See [D2.2 audit and limitations](VirtualAudio/D2_2_AUDIT.md),
+[validation status](VirtualAudio/D2_2_STATUS.md), and
+[the approved security policy](VirtualAudio/D2_SECURITY.md).
 
 ## Official build
 
@@ -22,6 +23,7 @@ From the repository root:
 ```powershell
 ./Build.ps1
 ./Build.ps1 -Configuration Debug
+./Build.ps1 -Configuration Release -Analyze
 ```
 
 The default Release build compiles the desktop app, compiles the native format
@@ -43,7 +45,7 @@ Build logs and metadata are under ignored `VirtualAudio/.work/logs/`.
 See [D1 validation and limitations](VirtualAudio/D1_STATUS.md) and the
 [driver implementation plan](VirtualAudio/IMPLEMENTATION.md).
 
-Next: secure, bounded PCM transport to the app, routing-engine integration,
+Next: signed isolated-environment transport validation, service/client and routing integration,
 Windows audio/runtime validation, and signing/installation packaging.
 
 ## Desktop app
