@@ -24,7 +24,7 @@ public sealed class AdaptiveBuffer {
         lock (gate) {
             int frames = stereo.Length / 2, capacity = samples.Length / 2;
             if (frames >= capacity) { stereo = stereo[^((capacity - 1) * 2)..]; frames = capacity - 1; }
-            if (write - read + frames >= capacity) { Overruns++; read = Math.Max(read, write + frames - capacity + 1); primed = false; }
+            if (write - read + frames >= capacity) { Overruns++; read = Math.Max(read, write + frames - target); primed = false; }
             for (int f = 0; f < frames; f++) {
                 int i = (int)((write + f) % capacity) * 2;
                 samples[i] = stereo[f * 2]; samples[i + 1] = stereo[f * 2 + 1];

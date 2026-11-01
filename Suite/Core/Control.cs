@@ -22,9 +22,10 @@ public sealed record RoutingPlan(string Layout, OutputRoute[] Outputs) {
     }
 }
 public sealed record ControlRequest(string Command, RoutingPlan? Plan = null);
+public sealed record PlaybackDevice(string Id, string Name);
 public sealed record ServiceStatus(bool Running, string Detail, string ServiceVersion,
     string DriverVersion, float[] Peaks, ulong Frames = 0, ulong Discontinuities = 0,
-    ulong OverflowFrames = 0, long Underruns = 0, double MaximumDriftPpm = 0);
+    ulong OverflowFrames = 0, long Underruns = 0, double MaximumDriftPpm = 0, PlaybackDevice[]? Devices = null);
 public sealed record ControlReply(bool Success, string? Error, ServiceStatus Status);
 
 public static class ControlWire {

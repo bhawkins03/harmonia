@@ -19,6 +19,11 @@ internal static class Program
 #if HARMONIA_LITE
         Application.Run(new LiteForm());
 #else
+        if (new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent())
+            .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)) {
+            MessageBox.Show("Run Harmonia Suite normally, without administrator mode. Only its installer needs elevation.", "Harmonia Suite");
+            return;
+        }
         Application.Run(new MainForm());
 #endif
     }

@@ -12,13 +12,30 @@ internal sealed class RoutingHost : IDisposable {
     private readonly object gate = new();
     private CancellationTokenSource? cancellation;
     private Task? worker;
+    private RoutingPlan? currentPlan;
+    private IReadOnlyDictionary<string, float> gains = new Dictionary<string, float>();
     private static string ServiceVersion => typeof(RoutingHost).Assembly.GetName().Version!.ToString(3);
     private ServiceStatus status = new(false, "Stopped", ServiceVersion, ReadDriverVersion(), new float[6]);
     public ServiceStatus Snapshot { get { lock (gate) return status with { Peaks = (float[])status.Peaks.Clone() }; } }
+    public PlaybackDevice[] Devices() {
+        using var enumerator = new MMDeviceEnumerator();
+        return enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
+            .Where(d => !IsVirtual(d)).Select(d => new PlaybackDevice(d.ID, d.FriendlyName)).ToArray();
+    }
+    private static bool IsVirtual(MMDevice device) => device.DeviceFriendlyName.Contains("Harmonia", StringComparison.OrdinalIgnoreCase) ||
+        device.FriendlyName.Contains("Harmonia", StringComparison.OrdinalIgnoreCase);
     public void Start(RoutingPlan plan) {
-        plan.Validate(); Stop();
+        plan.Validate(); Stop(); currentPlan = plan;
+        Volatile.Write(ref gains, plan.Outputs.ToDictionary(o => o.Role, o => o.Gain));
         cancellation = new(); var token = cancellation.Token;
         worker = Task.Run(() => Run(plan, token));
+    }
+    public void UpdateGains(RoutingPlan plan) {
+        plan.Validate();
+        if (currentPlan is null || currentPlan.Layout != plan.Layout ||
+            !currentPlan.Outputs.Select(o => (o.Role, o.DeviceId)).OrderBy(o => o.Role).SequenceEqual(plan.Outputs.Select(o => (o.Role, o.DeviceId)).OrderBy(o => o.Role)))
+            throw new ArgumentException("Stop routing before changing device assignments.");
+        Volatile.Write(ref gains, plan.Outputs.ToDictionary(o => o.Role, o => o.Gain));
     }
     public void Probe() {
         Stop(); cancellation = new(); var token = cancellation.Token;
@@ -33,7 +50,7 @@ internal sealed class RoutingHost : IDisposable {
                 foreach (var route in plan.Outputs) {
                     using var device = devices.GetDevice(route.DeviceId);
                     // Driver endpoints must never become a routed sink (feedback).
-                    if (device.FriendlyName.Contains("Harmonia", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("A virtual Harmonia endpoint cannot be an output.");
+                    if (IsVirtual(device)) throw new ArgumentException("A virtual Harmonia endpoint cannot be an output.");
                     if (device.State != DeviceState.Active) throw new IOException("Output device is unavailable: " + device.FriendlyName);
                     sinks.Add(new PhysicalSink(device, route));
                 }
@@ -63,7 +80,8 @@ internal sealed class RoutingHost : IDisposable {
                     accepting = true; generation = m.Generation; sequence = m.Sequence; nextFrame = m.FirstFrame + m.FrameCount;
                     var samples = MemoryMarshal.Cast<byte, float>(packet.Pcm.AsSpan());
                     var peaks = new float[6];
-                    foreach (var sink in sinks) sink.Buffer.Add(ChannelRouter.Map(samples, m.Channels, sink.Route.Role, sink.Route.Gain, peaks));
+                    var packetGains = Volatile.Read(ref gains);
+                    foreach (var sink in sinks) sink.Buffer.Add(ChannelRouter.Map(samples, m.Channels, sink.Route.Role, packetGains.GetValueOrDefault(sink.Route.Role, 1), peaks));
                     foreach (var sink in sinks) if (sink.Failure is not null) throw new IOException("Physical output stopped.", sink.Failure);
                     frames += m.FrameCount;
                     lock (gate) status = new(true, $"Virtual driver: {m.Channels} channels / {m.SampleRate} Hz", ServiceVersion, status.DriverVersion,
@@ -85,6 +103,7 @@ internal sealed class RoutingHost : IDisposable {
     public void Stop() {
         cancellation?.Cancel(); worker?.GetAwaiter().GetResult(); worker = null;
         cancellation?.Dispose(); cancellation = null;
+        currentPlan = null;
         lock (gate) status = status with { Running = false, Detail = "Stopped", Peaks = new float[6] };
     }
     public void Dispose() => Stop();
@@ -114,8 +133,9 @@ internal sealed class RoutingHost : IDisposable {
             output = new WasapiOut(device, AudioClientShareMode.Shared, true, 30);
             try {
                 ISampleProvider source = new BufferedSource(Buffer);
-                if (device.AudioClient.MixFormat.SampleRate != 48000)
-                    source = new WdlResamplingSampleProvider(source, device.AudioClient.MixFormat.SampleRate);
+                using var formatClient = device.AudioClient;
+                int rate = formatClient.MixFormat.SampleRate;
+                if (rate != 48000) source = new WdlResamplingSampleProvider(source, rate);
                 output.Init(source); output.PlaybackStopped += (_, e) => Failure = e.Exception ?? new IOException("Playback stopped unexpectedly.");
                 output.Play();
             } catch { output.Dispose(); throw; }

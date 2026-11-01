@@ -26,7 +26,7 @@ public sealed record SuiteManifest(int Schema, string Channel, string Version, s
                 file.Sha256.Length != 64 || !file.Sha256.All(Uri.IsHexDigit)) throw new InvalidDataException("Invalid/duplicate release file.");
             if (!new[] { "App/", "Service/", "Driver/", "Installer/" }.Any(p => file.Path.StartsWith(p, StringComparison.Ordinal)))
                 throw new InvalidDataException("Unknown release component.");
-            if (file.Path.EndsWith(".cer", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".pfx", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase))
+            if (new[] { ".cer", ".pfx", ".p12", ".ps1", ".bat", ".cmd", ".vbs", ".wsf" }.Contains(Path.GetExtension(file.Path).ToLowerInvariant()))
                 throw new InvalidDataException("Certificates and installation scripts cannot be release payloads.");
         }
         foreach (var required in new[] { "App/Harmonia.exe", "Installer/Harmonia.Suite.Installer.exe" })
@@ -68,6 +68,13 @@ public static class ReleaseSecurity {
             !signer.GetCertHashString(HashAlgorithmName.SHA256).Equals(Publisher, StringComparison.OrdinalIgnoreCase) ||
             !signer.Extensions.OfType<X509EnhancedKeyUsageExtension>().Any(e => e.EnhancedKeyUsages.Cast<Oid>().Any(o => o.Value == "1.3.6.1.5.5.7.3.3")))
             throw new CryptographicException("Release publisher mismatch or missing code-signing usage.");
+        if (cms.SignerInfos[0].DigestAlgorithm.Value is not ("2.16.840.1.101.3.4.2.1" or "2.16.840.1.101.3.4.2.2" or "2.16.840.1.101.3.4.2.3"))
+            throw new CryptographicException("Weak release signature digest.");
+        using var chain = new X509Chain();
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
+        chain.ChainPolicy.ApplicationPolicy.Add(new Oid("1.3.6.1.5.5.7.3.3"));
+        chain.ChainPolicy.ExtraStore.AddRange(cms.Certificates);
+        if (!chain.Build(signer)) throw new CryptographicException("Release certificate chain/revocation verification failed.");
         var manifest = JsonSerializer.Deserialize<SuiteManifest>(bytes) ?? throw new InvalidDataException("Empty manifest.");
         manifest.Validate(); return manifest;
     }
@@ -107,7 +114,13 @@ public static class ReleaseSecurity {
             if (!names.Add(entry.FullName) || entry.Length > 256 * 1024 * 1024 || (entry.ExternalAttributes >> 16 & 0xf000) == 0xa000) throw new InvalidDataException("Invalid archive entry.");
             string target = Path.Combine(destination, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!); NoLinks(Path.GetDirectoryName(target)!);
-            using var source = entry.Open(); using var output = new FileStream(target, FileMode.CreateNew); source.CopyTo(output);
+            using var source = entry.Open(); using var output = new FileStream(target, FileMode.CreateNew);
+            var buffer = new byte[65536]; int count; long copied = 0;
+            while ((count = source.Read(buffer)) > 0) {
+                copied += count; if (copied > entry.Length) throw new InvalidDataException("Archive expansion exceeded its declared size.");
+                output.Write(buffer, 0, count);
+            }
+            if (copied != entry.Length) throw new InvalidDataException("Truncated archive entry.");
         }
         var manifest = VerifyDirectory(destination);
         var allowed = manifest.Files.Select(f => f.Path).Append("suite-manifest.json").Append("suite-manifest.p7s").ToHashSet(StringComparer.OrdinalIgnoreCase);

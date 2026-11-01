@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Security.Principal;
 using System.Text.Json;
+using System.IO.Compression;
 using Harmonia.Suite;
 
 int checks = 0;
@@ -8,7 +9,10 @@ void Check(bool condition, string text) { checks++; if (!condition) throw new Ex
 void Deny(Action action, string text) { try { action(); } catch { checks++; return; } throw new Exception("Accepted: " + text); }
 if (args.Length > 0) {
     if (args[0] == "devices") {
-        Console.WriteLine("Use Suite UI device discovery; service probe requires no physical sink."); return;
+        using var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator();
+        Console.WriteLine(JsonSerializer.Serialize(enumerator.EnumerateAudioEndPoints(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.DeviceState.Active)
+            .Select(d => new { d.ID, d.FriendlyName, Rate = d.AudioClient.MixFormat.SampleRate, Channels = d.AudioClient.MixFormat.Channels })));
+        return;
     }
     async Task<ControlReply> Call(ControlRequest request) {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -19,19 +23,23 @@ if (args.Length > 0) {
         return reply;
     }
     if (args[0] == "status") { Console.WriteLine(JsonSerializer.Serialize((await Call(new("status"))).Status)); return; }
+    if (args[0] == "service-devices") { Console.WriteLine(JsonSerializer.Serialize((await Call(new("devices"))).Status.Devices)); return; }
     if (args[0] is "probe" or "protected" or "route") {
         bool routing = args[0] == "route", protectedContent = args[0] == "protected";
         var request = routing ? new ControlRequest("start", JsonSerializer.Deserialize<RoutingPlan>(File.ReadAllText(args[1]))) : new ControlRequest("probe");
-        await Call(request);
-        ulong frames = 0; var peaks = new float[6]; string detail = "";
+        var captures = routing ? request.Plan!.Outputs.Select(o => new CaptureVerifier(o)).ToArray() : [];
+        var initial = await Call(request); Console.WriteLine("Control accepted: " + JsonSerializer.Serialize(initial.Status));
+        ulong frames = 0; var peaks = new float[6]; string detail = ""; bool protectedSeen = false;
         try {
             for (int i = 0; i < 150; i++) {
                 var state = (await Call(new("status"))).Status; frames = Math.Max(frames, state.Frames); detail = state.Detail;
+                protectedSeen |= detail.Contains("Protected", StringComparison.OrdinalIgnoreCase);
                 for (int c = 0; c < 6; c++) peaks[c] = Math.Max(peaks[c], state.Peaks[c]);
                 await Task.Delay(100);
             }
-        } finally { await Call(new("stop")); }
-        Check(protectedContent ? frames == 0 && detail.Contains("Protected", StringComparison.OrdinalIgnoreCase) : frames > 1000 && peaks.All(p => p > 0), "Live service PCM/protection check: " + detail);
+        } finally { await Call(new("stop")); foreach (var capture in captures) capture.Dispose(); }
+        Check(protectedContent ? frames == 0 && protectedSeen : frames > 1000 && (routing ? peaks.Any(p => p > 0) : peaks.All(p => p > 0)), "Live service PCM/protection check: " + detail);
+        foreach (var capture in captures) Check(capture.Passed, "Physical loopback isolation failed for " + capture.Role + ": " + capture.Error);
         Console.WriteLine(JsonSerializer.Serialize(new { frames, peaks, detail }));
         Console.WriteLine("PASS: live driver-to-service " + args[0]); return;
     }
@@ -72,6 +80,14 @@ Deny(() => (manifest with { Channel = "lite" }).Validate(), "Lite release in Sui
 Deny(() => manifest.Compatible("1.0.0", "9.30.11.164"), "Service compatibility");
 Deny(() => manifest.Compatible("0.3.0", "11.0.0.0"), "Driver compatibility");
 Deny(() => (manifest with { Files = [files[0], files[0]] }).Validate(), "Duplicate manifest files");
+string archiveRoot = Path.Combine(Path.GetTempPath(), "HarmoniaArchiveTest-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(archiveRoot);
+try {
+    string archivePath = Path.Combine(archiveRoot, "traversal.zip");
+    using (var zip = ZipFile.Open(archivePath, ZipArchiveMode.Create)) { using var writer = new StreamWriter(zip.CreateEntry("../escape.txt").Open()); writer.Write("must never escape"); }
+    Deny(() => ReleaseSecurity.Extract(archivePath, Path.Combine(archiveRoot, "stage")), "Archive traversal");
+    Check(!File.Exists(Path.Combine(archiveRoot, "escape.txt")), "Traversal must not create outside staging");
+} finally { Directory.Delete(archiveRoot, true); }
 foreach (bool driver in new[] { false, true }) foreach (bool service in new[] { false, true }) {
     var platform = new FakeDeployment(); DeploymentTransaction.Run(platform, driver, service);
     Check(platform.Events.SequenceEqual(new[] { "stop" }.Concat(driver ? ["driver"] : Array.Empty<string>()).Concat(service ? ["service"] : Array.Empty<string>()).Concat(["health", "commit"])), "Coordinated component order");
@@ -81,6 +97,9 @@ foreach (bool driver in new[] { false, true }) foreach (bool service in new[] { 
         Check(platform.Events.Last() == "restore", "Rollback after " + failure);
     }
 }
+var reboot = new FakeDeployment { Reboot = true };
+Deny(() => DeploymentTransaction.Run(reboot, true, true), "Required reboot must suspend transaction");
+Check(reboot.Events.SequenceEqual(["stop", "driver"]), "No rollback or service start before required reboot");
 using (var stream = new MemoryStream()) {
     await ControlWire.WriteAsync(stream, new ControlRequest("start", new("DualStereo", [new("FrontLeft", "one"), new("FrontRight", "two")])), default);
     stream.Position = 0; var request = await ControlWire.ReadAsync<ControlRequest>(stream, default);
@@ -89,8 +108,8 @@ using (var stream = new MemoryStream()) {
 Console.WriteLine($"PASS: {checks} Suite channel, gain, clock-drift, bounds, lease, release-policy and rollback checks.");
 
 sealed class FakeDeployment : IDeploymentPlatform {
-    public string? Failure; public List<string> Events { get; } = new();
+    public string? Failure; public bool Reboot; public List<string> Events { get; } = new();
     private void Step(string step) { Events.Add(step); if (Failure == step) throw new IOException("Injected " + step); }
-    public void Stop() => Step("stop"); public void InstallDriver() => Step("driver"); public void InstallService() => Step("service");
+    public void Stop() => Step("stop"); public void InstallDriver() { Step("driver"); if (Reboot) throw new DeploymentRebootRequiredException("Injected reboot"); } public void InstallService() => Step("service");
     public void VerifyHealth() => Step("health"); public void Commit() => Step("commit"); public void Restore() => Step("restore");
 }

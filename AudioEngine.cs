@@ -14,6 +14,7 @@ internal sealed class AudioEngine : IDisposable
     private readonly object gate = new();
     private double lfeState;
     private readonly float[] levels = new float[6];
+    public Func<SpeakerRole, float>? GainProvider { get; set; }
     // [front L, front R, center, LFE, rear L, rear R], pre-device sample peaks.
     public float[] GetSignalPeaks()
     {
@@ -110,6 +111,8 @@ internal sealed class AudioEngine : IDisposable
                             _ => (0, 0)
                         };
                         int leftIndex = role switch { SpeakerRole.FrontLeft => 0, SpeakerRole.FrontRight => 1, SpeakerRole.Center => 2, SpeakerRole.Subwoofer => 3, SpeakerRole.RearStereo => 4, _ => 0 };
+                        float gain = GainProvider?.Invoke(role) ?? 1;
+                        a *= gain; b *= gain;
                         peaks[leftIndex] = Math.Max(peaks[leftIndex], Math.Abs(a));
                         if (role == SpeakerRole.RearStereo) peaks[5] = Math.Max(peaks[5], Math.Abs(b));
                         Buffer.BlockCopy(BitConverter.GetBytes(Math.Clamp(a, -1f, 1f)), 0, buffer, frame * 8, 4);

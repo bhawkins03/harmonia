@@ -9,6 +9,7 @@ obj/
 *.zip
 *.log
 VirtualAudio/.work/
+Suite/.work/
 VirtualAudio/driver/**/x64/
 VirtualAudio/driver/**/ARM64/
 VirtualAudio/driver/**/Debug/

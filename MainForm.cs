@@ -29,9 +29,18 @@ internal sealed class MainForm : Form
     {
         public SpeakerLayout Layout { get; set; } = SpeakerLayout.DualStereo;
         public Dictionary<string, Dictionary<string, string>> Assignments { get; set; } = new();
+        public Dictionary<SpeakerRole, float> Gains { get; set; } = new();
+        public bool CheckSuiteUpdates { get; set; } = true;
     }
 
-    private readonly AudioEngine audio = new();
+    private readonly SuiteAudioEngine audio;
+    private readonly ComboBox inputBackend = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
+    private readonly Label versions = new() { AutoSize = true, MaximumSize = new Size(350, 0), ForeColor = Color.Silver };
+    private readonly CheckBox startupUpdates = new() { Text = "Check for Suite updates at startup", AutoSize = true };
+    private readonly Button checkUpdates = new() { Text = "Check for Suite updates", AutoSize = true };
+    private readonly FlowLayoutPanel gainControls = new() { AutoSize = true, FlowDirection = FlowDirection.TopDown };
+    private bool polling;
+    private int meterTicks;
     private readonly Image brandImage;
     private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 50 };
     private readonly float[] displayLevels = new float[6];
@@ -65,10 +74,13 @@ internal sealed class MainForm : Form
         _ => SpeakerLayout.DualStereo
     };
 
-    public MainForm()
+    public MainForm(string? settingsDirectory = null, Func<(string Id, string Name)[]>? deviceDiscovery = null)
     {
+        audio = new SuiteAudioEngine(deviceDiscovery);
+        if (settingsDirectory is not null) configPath = Path.Combine(settingsDirectory, "settings.json");
         settings = ReadSettings();
-        Text = "Harmonia — Speaker Layouts";
+        foreach (var gain in settings.Gains) audio.Gains[gain.Key] = float.IsFinite(gain.Value) ? Math.Clamp(gain.Value, 0, 2) : 1;
+        Text = "Harmonia Suite — Speaker Layouts";
         Size = new Size(1000, 665);
         MinimumSize = new Size(840, 540);
         StartPosition = FormStartPosition.CenterScreen;
@@ -104,7 +116,7 @@ internal sealed class MainForm : Form
         options.Controls.Add(layout, 0, 1);
         var note = new Label
         {
-            Text = "Auto: 6-channel PCM passthrough when the capture endpoint provides 5.1; otherwise stereo upmix.\nLFE optional. Default capture endpoint cannot be used as an output yet.",
+            Text = "Virtual driver input preserves discrete channels; stereo leaves center/LFE/rear silent. Choose Harmonia Virtual Audio explicitly in Windows Sound. Loopback is an optional diagnostic input.",
             ForeColor = Color.Silver, AutoSize = true, MaximumSize = new Size(350, 0), Padding = new Padding(0, 12, 0, 12)
         };
         options.Controls.Add(note, 0, 2);
@@ -114,6 +126,20 @@ internal sealed class MainForm : Form
         options.Controls.Add(tilesGroup, 0, 4);
         options.RowCount = 6;
         options.Controls.Add(strictInput, 0, 5);
+        inputBackend.Items.AddRange(new object[] { "Virtual driver (Suite service)", "Diagnostic: WASAPI loopback" });
+        inputBackend.SelectedIndex = 0;
+        inputBackend.SelectedIndexChanged += (_, _) => { if (!audio.IsRunning) { audio.Diagnostic = inputBackend.SelectedIndex == 1; strictInput.Enabled = audio.Diagnostic; BuildSelectors(); } };
+        strictInput.Enabled = false;
+        options.RowCount = 11;
+        options.Controls.Add(inputBackend, 0, 6);
+        options.Controls.Add(gainControls, 0, 7);
+        startupUpdates.Checked = settings.CheckSuiteUpdates;
+        startupUpdates.CheckedChanged += (_, _) => { settings.CheckSuiteUpdates = startupUpdates.Checked; SaveSelection(); };
+        options.Controls.Add(startupUpdates, 0, 8);
+        options.Controls.Add(checkUpdates, 0, 9);
+        options.Controls.Add(versions, 0, 10);
+        checkUpdates.Click += async (_, _) => await CheckSuiteUpdatesAsync(true);
+        Shown += async (_, _) => { await audio.Poll(); versions.Text = audio.Versions; if (settings.CheckSuiteUpdates) await CheckSuiteUpdatesAsync(false); };
         leftSide.Controls.Add(options);
         root.Controls.Add(leftSide, 0, 1);
 
@@ -140,7 +166,7 @@ internal sealed class MainForm : Form
         menu.Items.Add("Stop routing", null, (_, _) => StopRouting());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Quit());
-        tray = new NotifyIcon { Text = "Harmonia Lite", Icon = Icon, ContextMenuStrip = menu, Visible = true };
+        tray = new NotifyIcon { Text = "Harmonia Suite", Icon = Icon, ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => Restore();
 
         layout.SelectedIndexChanged += (_, _) => { if (!loading) { BuildSelectors(); SaveSelection(); map.Invalidate(); } };
@@ -174,8 +200,13 @@ internal sealed class MainForm : Form
             SaveSelection();
             map.Invalidate();
         };
-        meterTimer.Tick += (_, _) =>
+        meterTimer.Tick += async (_, _) =>
         {
+            if (++meterTicks % 5 == 0 && !polling) {
+                polling = true;
+                try { await audio.Poll(); if (!IsDisposed) { versions.Text = audio.Versions; if (audio.IsRunning) status.Text = audio.InputFormatDescription; } }
+                finally { polling = false; }
+            }
             var peaks = audio.GetSignalPeaks();
             for (int i = 0; i < displayLevels.Length; i++)
                 displayLevels[i] = audio.IsRunning ? Math.Max(peaks[i], displayLevels[i] * 0.70f) : 0;
@@ -190,7 +221,11 @@ internal sealed class MainForm : Form
 
     private Settings ReadSettings()
     {
-        try { return File.Exists(configPath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(configPath)) ?? new Settings() : new Settings(); }
+        try {
+            var value = File.Exists(configPath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(configPath)) ?? new Settings() : new Settings();
+            if (!Enum.IsDefined(value.Layout)) value.Layout = SpeakerLayout.DualStereo;
+            value.Assignments ??= new(); value.Gains ??= new(); return value;
+        }
         catch { return new Settings(); }
     }
 
@@ -198,6 +233,7 @@ internal sealed class MainForm : Form
     {
         if (loading) return;
         settings.Layout = CurrentLayout;
+        settings.Gains = new Dictionary<SpeakerRole, float>(audio.Gains);
         settings.Assignments[CurrentLayout.ToString()] = mappedDevices.ToDictionary(x => x.Key.ToString(), x => x.Value);
         try
         {
@@ -222,7 +258,7 @@ internal sealed class MainForm : Form
         {
             deviceNames.Clear();
             deviceTiles.Controls.Clear();
-            var defaultId = audio.DefaultDeviceId;
+            var defaultId = audio.Diagnostic ? audio.DefaultDeviceId : string.Empty;
             foreach (var device in audio.GetDevices())
             {
                 deviceNames[device.Id] = device.Name;
@@ -251,8 +287,17 @@ internal sealed class MainForm : Form
                 foreach (var entry in saved)
                     if (Enum.TryParse<SpeakerRole>(entry.Key, out var role) &&
                         AudioEngine.Roles(CurrentLayout).Contains(role) &&
-                        deviceNames.ContainsKey(entry.Value))
+                        !string.IsNullOrWhiteSpace(entry.Value))
                         mappedDevices[role] = entry.Value;
+            gainControls.Controls.Clear();
+            foreach (var role in AudioEngine.Roles(CurrentLayout)) {
+                var row = new FlowLayoutPanel { AutoSize = true };
+                row.Controls.Add(new Label { Text = RoleName(role), Width = 160 });
+                var gain = new NumericUpDown { Minimum = 0, Maximum = 200, Value = (decimal)(audio.Gains.GetValueOrDefault(role, 1) * 100), Width = 65 };
+                gain.ValueChanged += async (_, _) => { audio.Gains[role] = (float)gain.Value / 100; SaveSelection(); try { await audio.ApplyGains(); } catch (Exception ex) { status.Text = ex.Message; } };
+                row.Controls.Add(gain); row.Controls.Add(new Label { Text = "%", AutoSize = true });
+                gainControls.Controls.Add(row);
+            }
             map.Invalidate();
         }
         catch (Exception ex) { status.Text = "Device discovery failed"; MessageBox.Show(ex.Message, "Harmonia"); }
@@ -298,6 +343,7 @@ internal sealed class MainForm : Form
         try
         {
             audio.Start(CurrentLayout, selected, strictInput.Checked);
+            inputBackend.Enabled = false;
             SaveSelection();
             status.Text = audio.InputFormatDescription;
             start.Enabled = false;
@@ -310,7 +356,7 @@ internal sealed class MainForm : Form
         catch (Exception ex)
         {
             status.Text = "Unable to start";
-            MessageBox.Show(ex.Message + "\n\nIf your headphones are the default Windows audio device, they appear in the list but cannot be used as an output with the current endpoint-loopback engine. Avoid feedback by selecting a separate capture endpoint or wait for process-exclusion capture support.", "Harmonia", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(ex.Message + "\n\nVirtual input requires the Suite service and driver. Diagnostic loopback must be selected explicitly and cannot route back into its capture source.", "Harmonia Suite", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -327,14 +373,29 @@ internal sealed class MainForm : Form
 
     private void StopRouting()
     {
-        audio.Stop();
+        try { audio.Stop(); } catch (Exception ex) { status.Text = ex.Message; return; }
+        inputBackend.Enabled = gainControls.Enabled = true;
         status.Text = "Stopped";
         start.Enabled = true;
         stop.Enabled = false;
         refresh.Enabled = true;
         layout.Enabled = true;
-        strictInput.Enabled = true;
+        strictInput.Enabled = audio.Diagnostic;
         deviceTiles.Enabled = true;
+    }
+
+    private async Task CheckSuiteUpdatesAsync(bool manual)
+    {
+        checkUpdates.Enabled = false;
+        try {
+            var release = await SuiteUpdates.Find();
+            if (release is null) { if (manual) MessageBox.Show("No newer verified Suite release is available.", "Suite updates"); return; }
+            if (MessageBox.Show($"Download and verify {release.Title}? Installation may require administrator approval and a reboot.", "Suite update", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            var staged = await SuiteUpdates.Stage(release);
+            if (MessageBox.Show("The signed package and hashes are verified. Stop routing and install this Suite update?", "Suite update", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            audio.Stop(); SuiteUpdates.Install(staged); Quit();
+        } catch (Exception ex) { if (manual) MessageBox.Show(ex.Message, "Suite update failed"); else status.Text = ex.Message; }
+        finally { if (!IsDisposed) checkUpdates.Enabled = true; }
     }
 
     private void DrawSpeakerMap(object? sender, PaintEventArgs e)
@@ -383,7 +444,7 @@ internal sealed class MainForm : Form
             var label = g.MeasureString(text, labelFont);
             g.DrawString(text, labelFont, Brushes.Gainsboro, x - label.Width / 2, y + 19);
             string assigned = mappedDevices.TryGetValue(role, out var deviceId) && deviceNames.TryGetValue(deviceId, out var name)
-                ? name : "Drop device here";
+                ? name : mappedDevices.ContainsKey(role) ? "Disconnected (saved)" : "Drop device here";
             if (assigned.Length > 22) assigned = assigned[..19] + "...";
             var nameWidth = g.MeasureString(assigned, labelFont).Width;
             g.DrawString(assigned, labelFont, Brushes.LightSkyBlue, x - nameWidth / 2, y + 34);

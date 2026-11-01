@@ -40,9 +40,11 @@ internal sealed class ControlServer : IDisposable {
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.FirstPipeInstance, 4096, 4096, security);
         var heartbeat = DateTime.UtcNow;
         while (!token.IsCancellationRequested) {
+            bool connected = false;
             try {
                 using var accept = CancellationTokenSource.CreateLinkedTokenSource(token); accept.CancelAfter(1000);
                 await pipe.WaitForConnectionAsync(accept.Token);
+                connected = true;
                 using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(3));
                 var request = await ControlWire.ReadAsync<ControlRequest>(pipe, deadline.Token);
                 string? sid = null;
@@ -57,23 +59,38 @@ internal sealed class ControlServer : IDisposable {
                 });
                 if (sid == lease.Owner) heartbeat = DateTime.UtcNow;
                 ControlReply reply;
+                PlaybackDevice[]? devices = null;
                 try {
                     switch (request.Command) {
                         case "status": break;
+                        case "devices": devices = routing.Devices(); break;
                         case "health": lease.Require(sid!); routing.VerifyDriver(); break;
                         case "probe": lease.Acquire(sid!); heartbeat = DateTime.UtcNow; routing.Probe(); break;
                         case "start":
                             if (request.Plan is null) throw new ArgumentException("Routing plan required.");
                             request.Plan.Validate(); lease.Acquire(sid!); heartbeat = DateTime.UtcNow; routing.Start(request.Plan); break;
                         case "stop": lease.Require(sid!); routing.Stop(); lease.Release(); break;
+                        case "gains": lease.Require(sid!); routing.UpdateGains(request.Plan ?? throw new ArgumentException("Gains plan required.")); break;
                         default: throw new ArgumentException("Unknown command.");
                     }
-                    reply = new(true, null, routing.Snapshot);
+                    reply = new(true, null, routing.Snapshot with { Devices = devices });
                 } catch (Exception ex) { reply = new(false, ex.Message, routing.Snapshot); }
                 await ControlWire.WriteAsync(pipe, reply, deadline.Token);
+                // Disconnect discards unread pipe output. Wait for the client
+                // to close after reading its reply, bounded against stalled peers.
+                await pipe.ReadAsync(new byte[1], deadline.Token);
             } catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or OperationCanceledException) { }
-            finally { if (pipe.IsConnected) pipe.Disconnect(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or OperationCanceledException) {
+                if (pipe.IsConnected && ex is UnauthorizedAccessException) {
+                    try {
+                        using var timeout = new CancellationTokenSource(1000);
+                        await ControlWire.WriteAsync(pipe, new ControlReply(false, ex.Message,
+                            new(false, "Access denied", "unavailable", "unavailable", new float[6])), timeout.Token);
+                        await pipe.ReadAsync(new byte[1], timeout.Token);
+                    } catch (Exception denied) when (denied is IOException or OperationCanceledException) { }
+                }
+            }
+            finally { if (connected) pipe.Disconnect(); }
             if (lease.Owner is not null && DateTime.UtcNow - heartbeat > TimeSpan.FromSeconds(15)) { routing.Stop(); lease.Release(); }
         }
     }

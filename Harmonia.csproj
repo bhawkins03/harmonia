@@ -19,15 +19,20 @@
     <DefineConstants>$(DefineConstants);HARMONIA_LITE</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(LiteEdition)' == 'true'">
+    <Compile Remove="Suite*.cs" />
     <Compile Remove="MainForm.cs" />
     <Compile Remove="AudioEngine.cs" />
     <Compile Remove="SpeakerDiagnostics.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LiteEdition)' != 'true'">
+    <ProjectReference Include="Suite/Core/Harmonia.Suite.Core.csproj" />
     <Compile Remove="LiteForm.cs" />
     <Compile Remove="LiteStereoEngine.cs" />
     <Compile Remove="LiteUpdates.cs" />
   </ItemGroup>
+  <PropertyGroup Condition="'$(LiteEdition)' != 'true'">
+    <Version>0.3.0</Version><AssemblyVersion>$(Version).0</AssemblyVersion>
+  </PropertyGroup>
   <Target Name="GenerateHarmoniaIcon" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
     <Exec Command="powershell.exe -NoProfile -File &quot;$(MSBuildProjectDirectory)\scripts\Generate-LiteIcon.ps1&quot;" />
   </Target>
