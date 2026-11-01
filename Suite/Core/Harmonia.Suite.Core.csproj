@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors><Version>0.3.0</Version>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../VirtualAudio/protocol/Harmonia.Transport.csproj" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
+    <AssemblyMetadata Include="SuitePublisherSha256" Value="$(SuitePublisherSha256)" />
+    <AssemblyMetadata Include="SuiteDriverPublisherSha256" Value="$(SuiteDriverPublisherSha256)" />
+  </ItemGroup>
+</Project>

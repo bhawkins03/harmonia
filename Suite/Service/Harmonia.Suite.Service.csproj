@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><Version>0.3.0</Version>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors><AssemblyName>HarmoniaAudioTransport</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Harmonia.Suite.Core.csproj" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
+    <PackageReference Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
+  </ItemGroup>
+</Project>
