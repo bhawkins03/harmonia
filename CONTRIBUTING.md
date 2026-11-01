@@ -7,3 +7,6 @@ Please open an issue to discuss new routing, DSP, UI or surround features before
 Do not add user-specific audio endpoint IDs, private system configuration, secrets or build artifacts to commits. Keep the non-invasive Windows-audio-settings principle intact.
 
 This prototype has not yet been hardware-tested and should not be considered production-ready.
+Further development and driver/runtime testing take place in a VM. The D2.2
+source on main is the development baseline; signed VM validation remains
+pending. See [VM handoff](VirtualAudio/VM_HANDOFF.md).

@@ -3,6 +3,8 @@
 The audio-driver architecture on `main` is the official development baseline.
 Use the root `Build.ps1` for the app, native policy checks and driver package.
 This baseline is a development milestone, not a signed runtime release.
+The owner has designated D2.2 as the main build; further development and runtime
+testing take place in a VM. See VirtualAudio/VM_HANDOFF.md.
 
 ## Completed build milestones
 

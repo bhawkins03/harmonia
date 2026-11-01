@@ -1,9 +1,10 @@
 # D2.2 implementation and audit
 
-Status: source implementation on `feature/d2-transport-contract`; PR #20 must
-remain a draft. This is **not an installed, signed or runtime-validated audio
-transport**. No service or driver was installed. D3/D4 app integration is absent.
-The existing WASAPI loopback backend is unchanged.
+Status: D2.2 is designated for main as the VM development baseline by the owner.
+This is **not an installed, signed or runtime-validated audio transport**. Further
+development and driver testing take place in a VM. No service or driver was
+installed during this work. D3/D4 app integration is absent. The existing WASAPI
+loopback backend is unchanged. See VM_HANDOFF.md for continuation.
 
 ## Source and control interface
 

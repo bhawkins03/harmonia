@@ -1,8 +1,10 @@
 # D2.2 validation status
 
-Source implementation on `feature/d2-transport-contract`, incorporating the
-owner's security-approval commit `5c863ea`. PR #20 remains a draft; no merge or
-release deployment is part of this work.
+The owner has authorized promotion of the D2.2 implementation through PR #20
+to main as the VM development build. The original implementation was reviewed
+as a draft; this promotion does not establish runtime safety or a signed release.
+Further development and testing take place in a VM. See VM_HANDOFF.md.
+The security-approval commit `5c863ea` was incorporated before kernel handlers.
 
 Incremental source commits:
 - `4195630`: bounded transactional queue and focused native/compile-time tests.
@@ -100,4 +102,4 @@ read timestamps are explicitly estimated; actual DPC latency is unmeasured.
 Generation flushes are flagged but v1 has no generic flushed-frame loss counter.
 
 A user-mode transport service/client and routing integration remain D3/D4 work.
-Do not advertise this draft branch as an installable or validated audio release.
+Do not advertise this main development build as an installable or validated audio release.
