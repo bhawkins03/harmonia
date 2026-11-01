@@ -8,11 +8,11 @@ class Queue {
     u64 frame[CapacityFrames]{}, tick[CapacityFrames]{};
     u32 head=0, count=0, pending=Discontinuity;
     u64 nextFrame=0, sessions=0, lastEnd=0, lastReadTick=0;
-    bool active=false, running=false, allowed=false, removed=false, exhausted=false, delivered=false;
+    bool active=false, running=false, paused=false, allowed=false, removed=false, exhausted=false, delivered=false;
     Message snapshot{};
     constexpr void Flush() noexcept { head=0;count=0;pending|=Discontinuity; }
     constexpr void Add(u64& counter,u64 n) noexcept {
-        if(n>~u64(0)-counter) {counter=~u64(0);exhausted=true;Flush();} else counter+=n;
+        if(n>=~u64(0)-counter) {counter=~u64(0);exhausted=true;Flush();} else counter+=n;
     }
     constexpr void Advance(u64 n) noexcept { Add(nextFrame,n); }
     constexpr void Bump() noexcept {
@@ -20,7 +20,7 @@ class Queue {
         if(snapshot.Generation==~u64(0)) exhausted=true;else ++snapshot.Generation;
     }
     constexpr StreamState State() const noexcept {
-        return removed?StreamState::Removed:!active?StreamState::Stopped:!running?StreamState::Stopped:
+        return removed?StreamState::Removed:!active?StreamState::Stopped:!running?(paused?StreamState::Paused:StreamState::Stopped):
             !allowed?StreamState::Protected:StreamState::Running;
     }
     constexpr Message Response(Operation op,u64 now) const noexcept {
@@ -52,22 +52,23 @@ public:
         if(snapshot.QpcFrequency && snapshot.QpcFrequency!=frequency) {exhausted=true;Flush();return false;}
         snapshot.SampleRate=48000;snapshot.SampleFormat=1;snapshot.Channels=channels;snapshot.SpeakerMask=mask;
         snapshot.FrameBytes=static_cast<u16>(channels*4);snapshot.QpcFrequency=frequency;
-        active=true;running=false;allowed=false;removed=false;Bump();return !exhausted;
+        active=true;running=false;paused=false;allowed=false;removed=false;Bump();return !exhausted;
     }
-    constexpr void Run(bool value) noexcept {if(running!=value){running=value;Bump();}}
+    constexpr void Run(bool value) noexcept {if(running!=value || paused){running=value;paused=false;Bump();}}
+    constexpr void Pause() noexcept {if(running || !paused){running=false;paused=true;Bump();}}
     constexpr u64 Revoke() noexcept {allowed=false;if(active) Bump();else Flush();return snapshot.Generation;}
     constexpr void Grant(u64 ticket,bool eligible) noexcept {
         if(active && ticket==snapshot.Generation && eligible && !removed && !exhausted) {allowed=true;Bump();}
     }
-    constexpr void End(bool removal) noexcept {allowed=false;running=false;active=false;removed=removal;if(snapshot.Generation) Bump();else Flush();}
+    constexpr void End(bool removal) noexcept {allowed=false;running=false;paused=false;active=false;removed=removal;if(snapshot.Generation) Bump();else Flush();}
     constexpr void Disconnect() noexcept {
-        if(snapshot.Session) {Add(snapshot.DisconnectedFrames,count);Flush();snapshot.Session=0;}
+        if(snapshot.Session) {Add(snapshot.DisconnectedFrames,count);Flush();pending|=Disconnected;snapshot.Session=0;}
     }
     // Called only with whole frames consumed by the virtual DMA clock, before
     // publishing new position/notifications. No copy on an uncertain source.
     constexpr void Consume(const u8* cyclic,u32 cyclicBytes,u32 offset,u64 frames,bool committed,u64 firstTick) noexcept {
         if(!active || !running || removed || exhausted || !allowed || !frames) return;
-        if(!snapshot.Session) {Add(snapshot.DisconnectedFrames,frames);Advance(frames);return;}
+        if(!snapshot.Session) {Add(snapshot.DisconnectedFrames,frames);Advance(frames);pending|=Discontinuity|Disconnected;return;}
         const u32 stride=snapshot.FrameBytes;
         if(!committed || !cyclic || !cyclicBytes || cyclicBytes%stride || offset>=cyclicBytes || offset%stride ||
             frames>MaxFrames || frames>cyclicBytes/stride) {

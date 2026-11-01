@@ -1,6 +1,7 @@
 // Exercises the actual production state machine even where Application Control
 // prevents execution of freshly built native test programs. No policy changes.
 #include "../native/TransportQueue.h"
+#include "../native/RenderWindow.h"
 using namespace harmonia::transport;
 constexpr bool QueueProof(u16 channels,u32 mask) {
     Queue q{};u8 scratch[MaxPayload]{},out[MaxMessage]{},source[480*24]{};usize n=0;
@@ -31,3 +32,16 @@ constexpr bool QueueProof(u16 channels,u32 mask) {
 static_assert(QueueProof(2,3),"stereo bounded queue and fail-closed lifecycle");
 static_assert(QueueProof(6,0x60f),"side 5.1 exact ordering");
 static_assert(QueueProof(6,0x3f),"back 5.1 exact ordering");
+constexpr bool WindowProof() {
+    RenderWindow w{};
+    if(w.Contains(0,8,3840,8,true)) return false;
+    if(!w.Commit(3840,3840,8) || w.Contains(0,8,7680,8,true)) return false;
+    if(!w.Contains(3840,3840,7680,8,true) || w.Contains(3840,3840,7680,8,false)) return false;
+    if(w.Contains(3840,3841,7680,8,true) || w.Contains(3840,3840+8,7680,8,true)) return false;
+    if(!w.Commit(7680,3840,8) || !w.Contains(7600,160,7680,8,true)) return false;
+    if(w.Contains(3840,7680,7680,8,true)) return false; // DPC copy budget, not ring capacity.
+    w.Reset();if(w.Contains(7680,8,7680,8,true)) return false;
+    if(!w.Commit(15360,3840,8) || w.Contains(7680,8,7680,8,true)) return false;
+    return !w.Commit(~u64(0)-7,24,8);
+}
+static_assert(WindowProof(),"commit floor, wrap, budget, reset and overflow safety");

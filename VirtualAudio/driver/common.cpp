@@ -16,6 +16,7 @@ Abstract:
 
 #include <initguid.h>
 #include <sysvad.h>
+#include "HarmoniaTransport.h"
 #include "hw.h"
 #include "savedata.h"
 #include "IHVPrivatePropertySet.h"
@@ -1511,6 +1512,7 @@ Note:
 --*/
 {
     DPF_ENTER(("[CAdapterCommon::PowerChangeState]"));
+    HarmoniaTransportPower(m_pDeviceObject, NewState.DeviceState == PowerDeviceD0);
 
     // Notify all registered miniports of a power state change
     PLIST_ENTRY le = NULL;
@@ -5109,5 +5111,3 @@ CAdapterCommon::NotifyEndpointPair
 
     return ntStatus;
 }
-
-

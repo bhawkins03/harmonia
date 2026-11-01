@@ -17,6 +17,7 @@ Abstract:
 
 
 #include "tonegenerator.h"
+#include "../../native/RenderWindow.h"
 
 
 //
@@ -89,6 +90,12 @@ public:
     friend class                CMiniportWaveRT;
     friend EXT_CALLBACK         TimerNotifyRT;
 protected:
+    void QuiesceTransport();
+    KMUTEX m_TransportLifecycle{};
+    bool m_TransportInitialized = false;
+    bool m_TransportBufferReady = false;
+    harmonia::transport::RenderWindow m_TransportWindow{};
+    bool m_TransportExportEligible = false;
     CMiniportWaveRT*            m_pMiniport;
     ULONG                       m_ulPin;
     BOOLEAN                     m_bCapture;
@@ -287,7 +294,7 @@ private:
     
     VOID ReadBytes
     (
-        _In_ ULONG ByteDisplacement
+        _In_ ULONGLONG ByteDisplacement
     );
     
     VOID UpdatePosition
@@ -315,7 +322,3 @@ private:
 };
 typedef CMiniportWaveRTStream *PCMiniportWaveRTStream;
 #endif // _SYSVAD_MINWAVERTSTREAM_H_
-
-
-
-

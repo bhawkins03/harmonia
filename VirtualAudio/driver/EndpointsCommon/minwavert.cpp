@@ -3928,3 +3928,11 @@ Exit:
 
 
 
+
+#pragma code_seg("PAGE")
+NTSTATUS CMiniportWaveRT::QueryExportRights(ULONG id, PDRMRIGHTS rights)
+{
+    PAGED_CODE();
+    if (!m_pDrmPort || !rights || !id) return STATUS_ACCESS_DENIED;
+    return m_pDrmPort->GetContentRights(id, rights);
+}

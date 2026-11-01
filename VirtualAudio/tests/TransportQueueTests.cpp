@@ -4,6 +4,9 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <mutex>
+#include <atomic>
 using namespace harmonia::transport;
 static int checks;
 static void Check(bool value) {if(!value) throw std::runtime_error("queue check "+std::to_string(checks));++checks;}
@@ -63,7 +66,42 @@ int main() try {
         h->queue->End(true);Check(h->Call(Operation::ReadFrames,1,h->queue->Generation()).Result==Status::Removed);
         Check(h->queue->Count()==0);h->queue->Grant(ticket,true);Check(h->queue->Count()==0);
     }
+    {
+        auto h=std::make_unique<Harness>();h->Call(Operation::Attach);h->Start(2,3);
+        h->queue->Pause();Check(h->Call(Operation::State).State==StreamState::Paused);
+        Check(h->Call(Operation::ReadFrames,1,h->queue->Generation()).Result==Status::Stopped);
+        h->queue->Run(true);h->Call(Operation::Detach);
+        h->queue->Consume(nullptr,0,0,~u64(0),false,1000);
+        Check(h->Call(Operation::Attach).Result==Status::CounterExhausted);
+    }
     {auto q=std::make_unique<Queue>();Check(!q->Begin(8,0x63f,1000));Check(!q->Begin(6,3,1000));Check(!q->Begin(2,3,0));}
+    {
+        // Model the driver's single-lock linearization. This tests the exact
+        // queue core, not Windows spinlocks/IRP cancellation or Driver Verifier.
+        auto h=std::make_unique<Harness>();h->Call(Operation::Attach);h->Start(6,0x60f);
+        std::mutex lock;std::atomic<bool> done=false;u32 received=0;Continuity continuity;
+        std::thread producer([&] {
+            std::vector<u8> source(160*24,0x6b);
+            for(u32 i=0;i<1000;++i) {
+                std::lock_guard<std::mutex> held(lock);
+                if(i%37==0) {h->queue->End(false);h->queue->Begin(6,0x60f,10000000);h->queue->Run(true);auto ticket=h->queue->Revoke();h->queue->Grant(ticket,true);}
+                h->queue->Consume(source.data(),static_cast<u32>(source.size()),0,160,true,10000+i*100000ULL);
+            }
+            done=true;
+        });
+        for(;;) {
+            bool finish=false;
+            {
+                std::lock_guard<std::mutex> held(lock);
+                auto m=h->Call(Operation::ReadFrames,480,h->queue->Generation());
+                if(m.Result==Status::Ok) {Check(continuity.Accept(m,h->out+HeaderBytes,m.PayloadBytes));received+=m.FrameCount;}
+                else Check(m.Result==Status::NoData);
+                Check(h->queue->Count()<=8192);finish=done && h->queue->Count()==0;
+            }
+            if(finish) break;std::this_thread::yield();
+        }
+        producer.join();Check(received>0);
+    }
     std::cout<<"Native transport queue passed: "<<checks<<" checks (stereo/side/back, wrap, overflow, transaction, disconnect, rights, removal)\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
