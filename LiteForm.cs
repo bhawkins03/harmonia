@@ -12,6 +12,7 @@ internal sealed class LiteForm : Form
         public string RightId { get; set; } = "";
         public int LeftVolume { get; set; } = 100;
         public int RightVolume { get; set; } = 100;
+        public bool CheckUpdatesOnStartup { get; set; } = true;
     }
 
     private sealed record Device(string Id, string Name) { public override string ToString() => Name; }
@@ -24,6 +25,8 @@ internal sealed class LiteForm : Form
     private readonly Label meters = new() { Text = "L  ░░░░░░░░░░    R  ░░░░░░░░░░", ForeColor = Color.LightSkyBlue, AutoSize = true };
     private readonly Button start = new() { Text = "Start routing", Width = 140, Height = 38 };
     private readonly Button stop = new() { Text = "Stop", Width = 92, Height = 38, Enabled = false };
+    private readonly CheckBox updatesEnabled = new() { Text = "Check for Lite updates on startup", AutoSize = true, ForeColor = Color.Gainsboro };
+    private readonly LinkLabel updatesNow = new() { Text = "Check for updates now", AutoSize = true, LinkColor = Color.LightSkyBlue };
     private readonly Button refresh = new() { Text = "Refresh devices", Width = 145, Height = 38 };
     private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 150 };
     private readonly NotifyIcon tray;
@@ -52,7 +55,7 @@ internal sealed class LiteForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 85));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 75));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
 
         var header = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
@@ -77,10 +80,17 @@ internal sealed class LiteForm : Form
         inputs.Controls.Add(leftVolume, 0, 3);
         inputs.Controls.Add(rightVolume, 1, 3);
         root.Controls.Add(inputs, 0, 2);
-        root.Controls.Add(new Label {
+        var bottomInfo = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        bottomInfo.Controls.Add(new Label {
             Text = "The Windows default playback device is the capture source, not an available output.\nChange your default audio device if you need to route to it.",
             Dock = DockStyle.Fill, AutoSize = true, ForeColor = Color.Silver
-        }, 0, 3);
+        });
+        var updateOptions = new FlowLayoutPanel { Width = 710, Height = 30, WrapContents = false };
+        updateOptions.Controls.Add(updatesEnabled);
+        updatesNow.Margin = new Padding(24, 3, 0, 0);
+        updateOptions.Controls.Add(updatesNow);
+        bottomInfo.Controls.Add(updateOptions);
+        root.Controls.Add(bottomInfo, 0, 3);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         footer.Controls.Add(start);
         footer.Controls.Add(stop);
@@ -102,6 +112,7 @@ internal sealed class LiteForm : Form
         loading = true;
         leftVolume.Value = Math.Clamp(preferences.LeftVolume, 0, 100);
         rightVolume.Value = Math.Clamp(preferences.RightVolume, 0, 100);
+        updatesEnabled.Checked = preferences.CheckUpdatesOnStartup;
         loading = false;
         engine.LeftGain = leftVolume.Value / 100f;
         engine.RightGain = rightVolume.Value / 100f;
@@ -113,6 +124,9 @@ internal sealed class LiteForm : Form
         start.Click += (_, _) => StartRouting();
         stop.Click += (_, _) => StopRouting();
         refresh.Click += (_, _) => RefreshDevices();
+        updatesEnabled.CheckedChanged += (_, _) => { preferences.CheckUpdatesOnStartup = updatesEnabled.Checked; SavePreferences(); };
+        updatesNow.LinkClicked += async (_, _) => await LiteUpdates.CheckAsync(this, true);
+        Shown += async (_, _) => { if (preferences.CheckUpdatesOnStartup) await LiteUpdates.CheckAsync(this, false); };
         meterTimer.Tick += (_, _) =>
         {
             if (!engine.IsRunning) return;
@@ -135,6 +149,7 @@ internal sealed class LiteForm : Form
         preferences.RightId = (right.SelectedItem as Device)?.Id ?? "";
         preferences.LeftVolume = leftVolume.Value;
         preferences.RightVolume = rightVolume.Value;
+        preferences.CheckUpdatesOnStartup = updatesEnabled.Checked;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
@@ -194,6 +209,7 @@ internal sealed class LiteForm : Form
     private void Restore() { Show(); WindowState = FormWindowState.Normal; Activate(); }
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (Equals(Tag, "lite-update-close")) quitting = true;
         if (!quitting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); return; }
         base.OnFormClosing(e);
     }
