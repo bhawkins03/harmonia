@@ -9,6 +9,7 @@ on:
       - '**/*.csproj'
       - '.github/workflows/build-lite.yml'
       - 'scripts/**'
+      - '.github/workflows/build-lite.yml'
   pull_request:
     paths:
       - '**/*.cs'
@@ -34,7 +35,7 @@ jobs:
       - name: Publish portable, self-contained Lite EXE
         shell: pwsh
         run: |
-          dotnet publish Harmonia.csproj -c Release -r win-x64 --self-contained true -o Lite-Output -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -p:IncludeNativeLibrariesForSelfExtract=true
+          dotnet publish Harmonia.csproj -c Release -r win-x64 --self-contained true -o Lite-Output -p:LiteEdition=true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -p:IncludeNativeLibrariesForSelfExtract=true
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path 'Lite-Output/Harmonia.exe')) { throw 'Lite executable missing' }
           if (Get-ChildItem Lite-Output -Include '*.sys','*.inf','*.cat' -Recurse) { throw 'Driver files in Lite output' }
@@ -73,38 +74,32 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  publish-preview:
-    name: Publish Lite preview to Releases
+  publish-lite:
+    name: Publish official Lite release
     needs: lite
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out release version
-        uses: actions/checkout@v4
-
-      - name: Download tested Lite ZIP
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           name: Harmonia-Lite-win-x64
           path: release
-
-      - name: Verify release file
-        run: test -s release/Harmonia-Lite-win-x64.zip
-
-      - name: Publish tagged Lite release
+      - name: Publish release if missing
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-          VERSION=$(grep -oP "(?<=<Version>)[^<]+" Harmonia.csproj)
-          TAG="v${VERSION}-lite-preview"
+          set -euo pipefail
+          test -s release/Harmonia-Lite-win-x64.zip
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' Harmonia.csproj)
+          TAG="v${VERSION}-lite"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Preview release already exists; not overwriting an existing build."
+            echo "Release $TAG already exists; refusing to replace it."
             exit 0
           fi
           gh release create "$TAG" release/Harmonia-Lite-win-x64.zip \
             --target "$GITHUB_SHA" \
-            --title "Harmonia Lite $TAG — Preview" \
-            --notes "Portable, driverless Windows x64 preview. Download Harmonia-Lite-win-x64.zip, extract and run Harmonia.exe. No PowerShell, Git, Visual Studio, or separate .NET installation needed. Uses the experimental WASAPI loopback backend; no virtual playback driver, no native 5.1 input guarantee, and independent output clocks can drift. This is an unsigned early preview, not a production-ready release. Harmonia Suite remains in kernel-driver development and is not included." \
-            --prerelease
+            --title "Harmonia Lite v${VERSION}" \
+            --notes "Official Lite release: portable, driverless stereo-only audio routing to two separate Windows playback devices, with left/right volume controls. Download ZIP, extract and run Harmonia.exe. No Git, SDK, PowerShell, .NET installation or audio driver required. Source endpoint is the current Windows default output and must not be selected as an output. Independent device clocks can drift. Unsigned early release; Windows may show a trust warning. Harmonia Suite remains under development."

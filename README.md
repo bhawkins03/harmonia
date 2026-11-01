@@ -1,25 +1,30 @@
 # Harmonia
 
-## Choose an edition
+## Download Harmonia Lite
 
-| Edition | For whom | Download / status |
-| --- | --- | --- |
-| **Harmonia Lite** | Friends and Windows users wanting driverless, experimental multi-device audio routing using WASAPI loopback | [Download the latest Lite preview](https://github.com/bhawkins03/harmonia/releases/tag/v0.1.0-lite-preview) (Windows x64 portable ZIP) |
-| **Harmonia Suite** | Users who want a selectable virtual Windows 5.1 render device and native discrete-channel routing | **In development — no functional public installer yet.** |
+**[Download Harmonia Lite v0.2.0](https://github.com/bhawkins03/harmonia/releases/tag/v0.2.0-lite)** · Windows x64 · Portable application
 
-**Lite branding:** The portable EXE, window title bar, system tray and app header now use the white Harmonia logo, with transparent artwork generated into an ICO during the Windows build.\n\n**Using Lite:** Download `Harmonia-Lite-win-x64.zip`, extract it, and double-click
-`Harmonia.exe`. No Git, PowerShell, .NET SDK, or separate .NET runtime is needed
-for the self-contained build. No driver installation is required. The preview
-is unsigned, so Windows SmartScreen may warn; don't bypass warnings unless you
-trust the code and downloaded file.
+Lite focuses on the original goal: **send stereo left and right channels
+to two separate Windows playback devices** (for example, two monitor speakers).
+Choose one device for LEFT and another for RIGHT, adjust each volume
+independently, then click **Start routing**. Your selections are remembered.
 
-Lite captures the Windows default playback endpoint using WASAPI loopback,
-so that same endpoint cannot simultaneously be a routed output. It does not
-create a virtual audio device or guarantee native 5.1 input; independent output
-clocks can drift. **Suite is not yet ready for end-user use.**
+Download the ZIP, extract, and double-click `Harmonia.exe`. No developer
+toolchain, Git, PowerShell, .NET runtime installation or kernel driver needed.
+The Windows default output is the *source* for WASAPI loopback; it cannot also
+be one of the two selected outputs. Lite does not offer 5.1, center, subwoofer,
+rear surround, synthetic upmix, speaker-map editing, or driver installation.
+Separate physical device clocks may drift. This unsigned release may prompt
+a Windows reputation warning.
 
-See [edition architecture and packaging](docs/EDITIONS.md) for what is included
-in each edition, known limitations, and release requirements.
+## Harmonia Suite
+
+Suite is the ongoing full project for a selectable Windows virtual audio
+endpoint, native multichannel audio and advanced multi-device routing.
+**It is not yet a tested end-user download.** Driver and service development
+continues independently from Lite.
+
+See [edition architecture](docs/EDITIONS.md).
 
 Harmonia is an open-source Windows audio-routing project. The **audio-driver
 architecture on `main` is the official development baseline** going forward.
