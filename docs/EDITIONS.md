@@ -24,15 +24,21 @@ Users choose it explicitly in Windows Sound. The suite requires signed
 installation, privilege-aware upgrades/uninstallation, separate service
 lifetimes and real VM/hardware verification.
 
-**Not a finished edition yet.** Although D2.1 and D2.2 driver source is on
-main, there is no validated end-to-end driver-to-app transport or user-mode
-audio service. The official Suite development baseline now includes a signed
+**Not a finished edition yet.** The D2.1/D2.2 driver and D3/D4 user-mode
+integration are present, but physical end-to-end output and trusted update
+installation still need validation. The Suite development baseline includes a signed
 VM-tested virtual render endpoint: 48-kHz six-channel Float32 playback, PCM
 export through SYSTEM and restricted LocalService, channel isolation, access
 denial and simulated CopyProtect denial passed on November 1, 2026. The normal
 Release driver was restored and retested. See [VM evidence and pending work](../VirtualAudio/VM_HANDOFF.md).
-Service/client and frontend routing integration remain pending. Source packages
-are unsigned; development test signing does not establish production readiness.
+The source now includes the restricted LocalService transport, per-device
+adaptive routing, authenticated frontend controls, live gains, preserved full
+interface, and Suite-specific manifest/signature updater and coordinated
+installer. Real driver-to-service delivery and interface tests passed in the
+VM; physical output validation and trusted update/deployment remain pending.
+Public updates are disabled until production signing is available, as selected
+by the owner. See [integration](SUITE_INTEGRATION.md) and [release contract](SUITE_UPDATES.md).
+Source packages are unsigned; development test signing does not establish production readiness.
 Do not label an unsigned development archive a public Suite release.
 
 ## Friend-friendly download
@@ -44,6 +50,14 @@ PowerShell or separate .NET runtime is required. This is a portable unsigned
 preview, not an installer. Suite has no user-ready release yet.
 
 ## Development packaging
+
+Current Suite app/service VM builds use `scripts/Package-SuiteDevelopment.ps1`.
+The archive contains no driver/certificate and requires the separately validated
+driver already installed in Harmonia Test Bench. Its reviewed guest installer
+checks VM identity, integrity hashes, protected ACLs and the restricted service
+configuration; see [integration instructions](SUITE_INTEGRATION.md).
+Production releases use `scripts/Package-SuiteRelease.ps1` with real production
+signing and a signed driver; public automatic updates remain disabled for now.
 
 From the repo root on Windows with the .NET 8 SDK:
 
@@ -71,6 +85,9 @@ prominent warning; nothing installs drivers, certs or services.
 Suite support is x64 only for now.
 
 ## Future shared-code structure
+
+The first routing/control core and service are implemented in `Suite/Core` and
+`Suite/Service`. The modules below describe further shared-code refactoring.
 
 As the service arrives, keep a small shared routing core and two
 application configurations:

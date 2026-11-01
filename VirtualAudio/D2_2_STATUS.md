@@ -12,8 +12,10 @@ again after synchronizing with current GitHub main. See [VM_HANDOFF.md](VM_HANDO
 for detailed results and evidence locations; [VM_DRM_REVIEW.md](VM_DRM_REVIEW.md)
 records the approved default-content rights change. These updates supersede
 historical no-runtime-test/zero-content-ID statements in the original status
-and audit. Frontend transport integration, remaining lifecycle/Verifier checks,
-latency/timestamp validation and production distribution remain pending.
+and audit. Suite service/frontend implementation and live driver-to-service
+validation are now recorded in `../docs/SUITE_INTEGRATION.md` and VM_HANDOFF.md.
+Physical output, remaining lifecycle/Verifier checks, latency/timestamp validation
+and trusted production distribution remain pending.
 Lite branch heads and Lite implementation are outside this Suite change.
 
 The original implementation and October 31 static-validation record follow.

@@ -71,7 +71,7 @@ foreach (double drift in new[] { -1000.0, 0, 1000 }) {
     buffer.Clear(); buffer.Read(output); Check(output.All(f => f == 0), "Discontinuity flush");
 }
 var overflow = new AdaptiveBuffer(100, 20); overflow.Add(new float[198]); overflow.Add(new float[198]); Check(overflow.BufferedFrames <= 100, "Bounded overflow");
-foreach (string path in new[] { "../x", "App/../x", "C:/x", "App\\x", "/x", "App/x:", "App/x.", "App//x" }) Deny(() => SuiteManifest.SafeRelative(path), path);
+foreach (string path in new[] { "../x", "App/../x", "C:/x", "App\\x", "/x", "App/x:", "App/x.", "App//x", "App/CON.exe", "App/LPT1" }) Deny(() => SuiteManifest.SafeRelative(path), path);
 Deny(ReleaseSecurity.RequirePublisher, "Unconfigured publisher must disable production updates");
 var files = new[] { new ReleaseFile("App/Harmonia.exe", new string('A', 64), 12), new ReleaseFile("Installer/Harmonia.Suite.Installer.exe", new string('B', 64), 12) };
 var manifest = new SuiteManifest(1, "suite", "0.3.1", "0.3.0", "9.30.11.164", "0.3.0", "0.3.9", "9.0.0.0", "10.0.0.0", false, false, 1, files);

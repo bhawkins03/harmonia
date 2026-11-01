@@ -27,8 +27,12 @@ its driverless release remain independent. See VirtualAudio/VM_HANDOFF.md.
 
 ## Routing integration (D3/D4)
 
-- [ ] Connect the native transport to a UI-independent routing host.
-- [ ] Preserve discrete channels and validate masks/subformats.
+- [x] Native transport client and restricted LocalService routing host.
+- [x] Full frontend controls the service through an authenticated local pipe.
+- [x] Discrete role mapping, live gains, bounded adaptive output buffers and WDL resampling.
+- [x] Real driver-to-service six-channel PCM delivery and interface/persistence VM checks.
+- [x] Suite updater verification, compatibility, coordinated deployment and rollback source/tests.
+- [ ] Production signing and end-to-end signed app/service/driver update tests (public updates disabled).
 - [ ] Channel-isolation, overflow, restart, sleep/wake and removal tests.
 - [ ] Clock-drift correction and long-running multi-device playback checks.
 

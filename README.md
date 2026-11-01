@@ -36,8 +36,11 @@ protocol tests. On November 1, 2026, signed VM tests passed six-channel PCM
 export through SYSTEM and restricted LocalService, unauthorized-access denial,
 and simulated CopyProtect denial. The normal Release driver was restored and
 retested. Export requires positively verified rights and fresh packet commits.
-The desktop app does not consume this transport yet; service/client and routing
-integration remain the next milestone. Source builds produce unsigned packages;
+The Suite desktop now controls a restricted transport service and discrete
+per-device routing pipeline; the explicit diagnostic loopback option remains.
+The service has received real six-channel driver PCM in the test VM. Physical
+multi-device output and production update/install validation remain open gates.
+Source builds produce unsigned packages;
 VM development signing is separate from production signing.
 See [D2.2 audit and limitations](VirtualAudio/D2_2_AUDIT.md),
 [validation status](VirtualAudio/D2_2_STATUS.md), and
@@ -82,8 +85,13 @@ Build logs and metadata are under ignored `VirtualAudio/.work/logs/`.
 See [D1 validation and limitations](VirtualAudio/D1_STATUS.md) and the
 [driver implementation plan](VirtualAudio/IMPLEMENTATION.md).
 
-Next: Suite service/client and routing integration, Driver Verifier and lifecycle
-stress, latency/timestamp validation, and production signing/installation packaging.
+See [Suite integration](docs/SUITE_INTEGRATION.md) and
+[Suite updates and installation](docs/SUITE_UPDATES.md) for architecture, build,
+testing and release instructions. Public Suite updates remain disabled until a
+production publisher and signed driver package are supplied.
+
+Next: physical-output isolation and clock/latency validation, Driver Verifier
+and lifecycle stress, and real signed installation/update/rollback testing.
 
 ## Desktop app
 
@@ -94,10 +102,12 @@ routing, speaker layouts, meters, channel tests, and recovery controls:
 dotnet run --project Harmonia.csproj
 ```
 
-This backend still captures the existing Windows default output. It does not
-consume the new virtual driver's audio yet. Independent output clocks can
-drift; stereo upmix is distinct from native 5.1 input. No real-hardware audio
-validation is claimed. See [native surround notes](docs/NATIVE_SURROUND.md).
+Suite selects virtual-driver input by default and enumerates outputs through
+the service. Choose Harmonia Virtual Audio explicitly in Windows Sound; no
+default devices are changed automatically. The old default-endpoint loopback
+engine is selectable only as a diagnostic. Independent clocks still require
+hardware validation; stereo upmix is distinct from discrete input. No physical
+multi-device validation is claimed. See [native surround notes](docs/NATIVE_SURROUND.md).
 
 Driver source derives from Microsoft's MIT-licensed SysVAD sample; its license
 and notices are retained in `VirtualAudio/driver/`. See [LICENSE](LICENSE),

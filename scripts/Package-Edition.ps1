@@ -57,7 +57,8 @@ Requires .NET 8 Desktop Runtime when not published self-contained.
 HARMONIA SUITE - EXPERIMENTAL DEVELOPMENT ARCHIVE ONLY
 NOT A FUNCTIONAL AUDIO PRODUCT OR INSTALLER.
 Contains the existing loopback desktop app and an unsigned experimental driver
-for authorized VM-only development. No user-mode driver transport service exists.
+for authorized VM-only development. This legacy archive omits the Suite transport
+service; use Package-SuiteDevelopment.ps1 for current VM integration.
 The driver must NOT be installed on a daily-use PC. It currently cannot
 deliver sound from the virtual endpoint into the desktop app.
 Nothing in this archive installs a driver, certificate or service.

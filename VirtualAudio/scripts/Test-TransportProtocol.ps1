@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('Debug','Release')][string]$Configuration='Release')
+param([ValidateSet('Debug','Release')][string]$Configuration='Release',[switch]$CompileOnly)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $vswhere="${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
@@ -32,6 +32,9 @@ exit /b %errorlevel%
 "@ | Set-Content $batch
 & $env:ComSpec /d /c $batch
 if ($LASTEXITCODE -ne 0) { throw 'Native transport test compilation failed.' }
+& dotnet build (Join-Path $root 'tests/TransportProtocol.Tests/TransportProtocol.Tests.csproj') --configuration $Configuration
+if ($LASTEXITCODE -ne 0) { throw 'C# transport test build failed.' }
+if($CompileOnly){Write-Output 'Transport test binaries compiled; execution deferred explicitly to the VM.';return}
 $fixtures=Join-Path $root 'tests/vectors/transport-v1.txt'
 & (Join-Path $output 'native.exe') $fixtures $output
 if ($LASTEXITCODE -ne 0) { throw 'C++ transport tests failed.' }
@@ -39,8 +42,6 @@ if ($LASTEXITCODE -ne 0) { throw 'C++ transport tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Native queue tests failed.' }
 & (Join-Path $output 'rights.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Content-rights policy tests failed.' }
-& dotnet build (Join-Path $root 'tests/TransportProtocol.Tests/TransportProtocol.Tests.csproj') --configuration $Configuration
-if ($LASTEXITCODE -ne 0) { throw 'C# transport test build failed.' }
 & dotnet (Join-Path $root "tests/TransportProtocol.Tests/bin/$Configuration/net8.0/TransportProtocol.Tests.dll") $fixtures $output
 if ($LASTEXITCODE -ne 0) { throw 'C# transport tests failed.' }
 foreach($suffix in @('encoded','fuzz')) {

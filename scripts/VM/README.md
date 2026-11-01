@@ -1,5 +1,17 @@
 # Harmonia VM development workflow
 
+Suite user-mode testing is in `Test-SuiteService.ps1`; see
+[Suite integration](../../docs/SUITE_INTEGRATION.md). It deploys the restricted
+service and limited-token interactive probes, checks protocol parity, UI and
+driver-to-service delivery, and removes its test service/task. It leaves the
+kernel driver unchanged. A separately prepared protected-simulation driver can
+be tested with `-ExpectProtected`; physical routing can be tested with an
+explicit `-RoutingPlanPath` when distinct service-visible output devices exist.
+`Test-SuiteProtectionCycle.ps1` wraps the protected test, service restart checks
+and normal Release restoration in a finally block; desktop sign-in is required
+after each reboot. `Test-SuiteDevelopmentDeployment.ps1` tests the separate
+development archive's install/uninstall without replacing the kernel driver.
+
 Run from the repository root in **elevated Windows PowerShell 5.1** in VS Code.
 Only the Generation 2 VM **Harmonia Test Bench** is accepted. No checkpoint is
 created, restored, deleted or overwritten by the top-level workflow. Before any

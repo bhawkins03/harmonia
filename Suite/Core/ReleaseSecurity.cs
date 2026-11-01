@@ -14,7 +14,7 @@ public sealed record SuiteManifest(int Schema, string Channel, string Version, s
     string ServiceDriverMinimum, string ServiceDriverMaximum, bool UpdateService, bool UpdateDriver,
     int TransportVersion, ReleaseFile[] Files) {
     public void Validate() {
-        if (Schema != 1 || Channel != "suite" || TransportVersion != 1 || Files is null || Files.Length is < 1 or > 1000)
+        if (Schema != 1 || Channel != "suite" || TransportVersion != 1 || Files is null || Files.Length is < 1 or > 1000 || Files.Sum(f => f.Size) > 1024L * 1024 * 1024)
             throw new InvalidDataException("Unsupported Suite release manifest.");
         foreach (string version in new[] { Version, ServiceVersion, DriverVersion, AppServiceMinimum, AppServiceMaximum, ServiceDriverMinimum, ServiceDriverMaximum })
             if (!System.Version.TryParse(version, out _)) throw new InvalidDataException("Invalid release version.");
@@ -42,7 +42,8 @@ public sealed record SuiteManifest(int Schema, string Channel, string Version, s
     }
     public static void SafeRelative(string path) {
         if (string.IsNullOrWhiteSpace(path) || path.Contains('\\') || path.Contains(':') || path.StartsWith('/') ||
-            path.Split('/').Any(p => p is "" or "." or ".." || p.EndsWith('.') || p.EndsWith(' ')) ||
+            path.Split('/').Any(p => p is "" or "." or ".." || p.EndsWith('.') || p.EndsWith(' ') ||
+                System.Text.RegularExpressions.Regex.IsMatch(p, @"^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])(\.|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)) ||
             path.Any(c => c < 32 || "<>\"|?*".Contains(c))) throw new InvalidDataException("Unsafe release path.");
     }
 }

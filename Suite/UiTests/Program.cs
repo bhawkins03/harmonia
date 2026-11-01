@@ -11,7 +11,7 @@ internal static class Program {
             {"Layout":2,"Assignments":{"Surround51Beta":{"FrontLeft":"disconnected-left","RearStereo":"remembered-headphones"}},"Gains":{"RearStereo":0.7},"CheckSuiteUpdates":false}
             """);
         var type = Assembly.Load("Harmonia").GetType("Harmonia.MainForm")!;
-        using var form = (Form)Activator.CreateInstance(type, [directory, (Func<(string Id, string Name)[]>)(() => [])])!;
+        using var form = (Form)Activator.CreateInstance(type, [directory, (Func<(string Id, string Name)[]>)(() => [("available-left", "Test left output"), ("available-right", "Test right output")])])!;
         object Field(string name) => type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
         void Check(bool condition, string text) { if (!condition) throw new Exception(text); }
         try {
@@ -25,7 +25,21 @@ internal static class Program {
             Check(saved.RootElement.GetProperty("Gains").GetProperty("RearStereo").GetSingle() == .55f, "Persist changed gain");
             Check(saved.RootElement.GetProperty("Assignments").GetProperty("Surround51Beta").GetProperty("RearStereo").GetString() == "remembered-headphones", "Preserve unplugged mappings");
             Check(((NotifyIcon)Field("tray")).Text == "Harmonia Suite", "Suite tray identity");
-            Console.WriteLine("PASS: full layouts, virtual default, drag/drop, gains, persistent unplugged mappings and Suite tray.");
+            var map = (Panel)Field("map"); map.ClientSize = new System.Drawing.Size(500, 400);
+            using (var preview = new System.Drawing.Bitmap(500, 400))
+            using (var graphics = System.Drawing.Graphics.FromImage(preview))
+                type.GetMethod("DrawSpeakerMap", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form,
+                    [map, new PaintEventArgs(graphics, new System.Drawing.Rectangle(0, 0, 500, 400))]);
+            var targets = (System.Collections.IDictionary)Field("dropTargets");
+            var role = targets.Keys.Cast<object>().Single(key => key.ToString() == "FrontLeft");
+            var rectangle = (System.Drawing.RectangleF)targets[role]!;
+            var point = map.PointToScreen(new System.Drawing.Point((int)(rectangle.X + rectangle.Width / 2), (int)(rectangle.Y + rectangle.Height / 2)));
+            var data = new DataObject(); data.SetData(typeof(string), "available-left");
+            typeof(Control).GetMethod("OnDragDrop", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(map,
+                [new DragEventArgs(data, 0, point.X, point.Y, DragDropEffects.Move, DragDropEffects.Move)]);
+            using var afterDrop = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "settings.json")));
+            Check(afterDrop.RootElement.GetProperty("Assignments").GetProperty("Surround51Beta").GetProperty("FrontLeft").GetString() == "available-left", "Drag/drop must persist assignment");
+            Console.WriteLine("PASS: full layouts, virtual default, actual map drop/persistence, gains, unplugged mappings and Suite tray.");
         } finally {
             ((System.Windows.Forms.Timer)Field("meterTimer")).Dispose();
             ((NotifyIcon)Field("tray")).Dispose();

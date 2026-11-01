@@ -1,5 +1,55 @@
 # VM development handoff
 
+## Suite integration update: 2026-11-01
+
+The D3/D4 service/frontend source is now implemented; historical statements below
+that these components do not exist are superseded. See
+`docs/SUITE_INTEGRATION.md` and `docs/SUITE_UPDATES.md` for architecture and gates.
+The full UI remains based on pre-split `3f494c1` plus `1400a79` branding. Lite
+implementation, update workflow and branch refs are outside this Suite work.
+
+The final protection/restore cycle passed:
+
+- Simulated CopyProtect, service 0.3.0 and Debug driver `10.28.11.732`: zero PCM
+  before and after controlled service restart, with Protected observed during
+  generated-tone playback. Native SYSTEM/restricted-token probes also passed.
+  Logs: `VirtualAudio/.work/vm-logs/20261101-104026-05316a25/` (service) and
+  `20261101-103717-20b8d7e2/` (native driver).
+- Restored normal Release driver `10.40.31.613`. Native publication, six-channel
+  isolation and access denial passed. Logs: `20261101-104414-3bca3505/`.
+- Suite service received 441,216 frames before restart and 441,744 after, peaks
+  0.02 on all six channels. Restricted LocalService and fresh handle acquisition
+  after restart were checked. Temporary service/task cleanup completed.
+- Final Suite VM tests: 180,171 deterministic routing/clock/release/rollback
+  checks; actual map drop and persistence, layouts, gains, saved missing devices
+  and tray identity; C++/C# golden-vector and 10,000-mutation parity, native queue
+  and 32 rights-policy checks. Logs: `20261101-104754-c0a4fdfa/`.
+
+Service-visible physical outputs were an empty list; the interactive RDP session
+reported only Remote Audio. Physical multi-device routing/isolation, removal,
+drift and latency cannot be claimed from this VM run. The source provides an
+explicit physical-routing/loopback probe for a suitable environment.
+
+Public updates are disabled by explicit owner choice until production publisher
+certificates and a Microsoft-signed driver are available. The production
+installer rejects an unconfigured publisher; no trusted positive release or
+real signed Windows update/rollback test has been performed. Injected transaction
+tests are not substitutes for these gates. No public release was created.
+
+The VM-only development archive
+`dist/Harmonia-Suite-VMDevelopment-20261101-105226.zip` passed a real guest
+install/controlled-uninstall test. Restricted LocalService, service health and
+the quoted protected executable path were checked; driver version/INF and user
+configuration were preserved. The temporary service was removed; installed
+files remain for recovery. Logs: `20261101-110223-acda2089/`. The archive contains
+no SYS/INF/CAT or certificate and is not a public update payload. SHA-256:
+`97D6DE7D25FA6CA0D8E6379D41ACBED78B6B367D32183011F76C597665161505`.
+
+Host Code Integrity blocked an unsigned rebuilt native protocol probe and one
+UI assembly during development. Policy was preserved; the complete regression
+was executed in the authorized VM. The transient slow VM connection recovered
+after reconnecting; heartbeat and resource usage remained healthy.
+
 ## Live validation update: 2026-11-01
 
 This update supersedes the historical unverified/deployment statements below.
