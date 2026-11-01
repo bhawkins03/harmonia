@@ -4,6 +4,12 @@ Status: D2 in progress. This document **does not** assert an operational driver-
 Based on the D1 baseline at `49315c1003239449b29cadeab73de7d053a4eddf`.
 The existing WASAPI loopback backend is unchanged.
 
+D2.1 now defines the explicitly serialized v1 protocol and C++/C# codecs in
+[PROTOCOL.md](PROTOCOL.md), with executable golden/malformed/continuity tests.
+It adds no kernel handlers, queue or service. Before D2.2 handlers are written,
+request explicit approval of the service identity and access policy in
+[D2_SECURITY.md](D2_SECURITY.md). See [D2_1_STATUS.md](D2_1_STATUS.md).
+
 ## Design decisions requiring review before kernel integration
 
 - Keep the WaveRT cyclic render buffer **distinct** from a private, bounded,

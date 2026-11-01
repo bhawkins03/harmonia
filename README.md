@@ -7,6 +7,9 @@ It combines a native virtual playback driver with a C# Windows desktop app.
 The minimal driver builds, but the driver-to-app audio transport is not yet
 implemented. The driver currently discards playback audio. It is unsigned,
 uninstalled, and has not been runtime-tested; this is a development build.
+The D2.1 v1 protocol codecs and cross-language tests are implemented; see
+[the wire specification](VirtualAudio/PROTOCOL.md) and
+[the security approval gate for D2.2](VirtualAudio/D2_SECURITY.md).
 
 ## Official build
 
@@ -22,7 +25,7 @@ From the repository root:
 ```
 
 The default Release build compiles the desktop app, compiles the native format
-policy tests, and builds/validates the unsigned x64 driver package. It does not
+policy and C++/C# transport tests, and builds/validates the unsigned x64 driver package. It does not
 install the driver, add certificates, or change Windows audio settings.
 
 App output: `bin/Release/net8.0-windows/`.

@@ -81,10 +81,15 @@ actual six-channel Windows shared-mode negotiation on a signed test build.
 
 ## D2: transport decision for review
 
+D2.1 wire serialization and C++/C# tests are implemented; see PROTOCOL.md and
+D2_1_STATUS.md. D2.2 queue/handlers remain unimplemented. D2_SECURITY.md requires
+explicit user approval of the concrete service/ACL policy before any handler
+implementation. The requirements below continue to apply to that future work.
+
 Refine PROTOCOL.md toward a private nonpaged ring with batched direct-I/O reads,
 rather than exposing writable shared cursors. Six-channel Float32 at 48 kHz is
-1,152,000 bytes/sec; a bounded copy is a reasonable prototype tradeoff. No ABI
-is frozen and no kernel transport is implemented yet.
+1,152,000 bytes/sec; a bounded copy is a reasonable prototype tradeoff. The v1
+wire encoding is defined; no kernel transport is implemented yet.
 
 - Inspect `UpdatePosition`, `WriteBytes`, `TimerNotifyRT` in minwavertstream.cpp.
   Copy newly consumed whole frames, handle cyclic wrap in two spans, and report

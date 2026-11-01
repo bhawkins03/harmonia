@@ -1,6 +1,8 @@
 # Harmonia Virtual Audio — Driver Design v0.1
 
-Status: architecture proposal. **No functional Windows driver is present.**
+Status: D1 builds a render-only sink; D2.1 implements the v1 wire codecs and
+tests. **No operational driver-to-app transport is present.** The v1 wire
+contract in PROTOCOL.md supersedes older ABI proposals in this document.
 
 ## Goal
 
@@ -41,7 +43,7 @@ User-mode service hosts transport consumer independently from tray UI so closing
 ## Input format proposal
 
 - v1: 48,000 Hz, interleaved IEEE-754 32-bit float PCM, 2 and 6 channels
-- optional compatibility: 16-bit integer PCM (explicit conversion at input boundary)
+- Future compatibility only: integer PCM is not supported by the v1 transport.
 - v2: 8 channels and more sample rates, with resampling in user mode
 - channel order is defined by **WAVEFORMATEXTENSIBLE** speaker mask, not simply channels count
 - 5.1 side channels: FL FR FC LFE SL SR, mask 0x60F
