@@ -18,6 +18,8 @@ internal sealed class MainForm : Form
     }
 
     private readonly AudioEngine audio = new();
+    private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 50 };
+    private readonly float[] displayLevels = new float[6];
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TableLayoutPanel assignmentsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
     private readonly Dictionary<SpeakerRole, ComboBox> selectors = new();
@@ -118,6 +120,14 @@ internal sealed class MainForm : Form
         testRearL.Click += async (_, _) => await TestRearAsync(true);
         testRearR.Click += async (_, _) => await TestRearAsync(false);
         map.Paint += DrawSpeakerMap;
+        meterTimer.Tick += (_, _) =>
+        {
+            var peaks = audio.GetSignalPeaks();
+            for (int i = 0; i < displayLevels.Length; i++)
+                displayLevels[i] = audio.IsRunning ? Math.Max(peaks[i], displayLevels[i] * 0.70f) : 0;
+            if (Visible && WindowState != FormWindowState.Minimized) map.Invalidate();
+        };
+        meterTimer.Start();
         loading = true;
         layout.SelectedIndex = (int)settings.Layout;
         loading = false;
@@ -276,29 +286,42 @@ internal sealed class MainForm : Form
         g.DrawEllipse(ring, cx - rx, cy - ry, rx * 2, ry * 2);
         g.DrawEllipse(ring, cx - rx * .6f, cy - ry * .6f, rx * 1.2f, ry * 1.2f);
 
-        void Speaker(float x, float y, string text, bool stereo = false)
+        void Meter(float x, float y, float peak)
+        {
+            // Four ascending Wi-Fi-style bars above the corresponding speaker.
+            int active = peak < .012f ? 0 : peak < .055f ? 1 : peak < .17f ? 2 : peak < .40f ? 3 : 4;
+            for (int i = 0; i < 4; i++)
+            {
+                var rect = new RectangleF(x - 15 + i * 9, y - 26 - (i + 1) * 5, 6, (i + 1) * 5);
+                using var brush = new SolidBrush(i < active ? (i == 3 ? Color.FromArgb(255, 189, 79) : Color.FromArgb(80, 230, 162)) : Color.FromArgb(55, 77, 96));
+                g.FillRectangle(brush, rect);
+            }
+        }
+
+        void Speaker(float x, float y, string text, int meterIndex)
         {
             g.DrawLine(thin, cx, cy, x, y);
-            var width = stereo ? 66f : 45f;
+            var width = 45f;
             var rect = new RectangleF(x - width / 2, y - 16, width, 32);
             using var bg = new SolidBrush(Color.FromArgb(39, 84, 122));
             using var border = new Pen(Color.FromArgb(80, 171, 245), 2);
             g.FillRectangle(bg, rect);
             g.DrawRectangle(border, rect.X, rect.Y, rect.Width, rect.Height);
             g.FillEllipse(speakerBrush, x - 5, y - 5, 10, 10);
+            Meter(x, y - 10, displayLevels[meterIndex]);
             var label = g.MeasureString(text, labelFont);
             g.DrawString(text, labelFont, Brushes.Gainsboro, x - label.Width / 2, y + 19);
         }
 
-        Speaker(cx - rx * .80f, cy - ry * .75f, "L");
-        Speaker(cx + rx * .80f, cy - ry * .75f, "R");
+        Speaker(cx - rx * .80f, cy - ry * .75f, "L", 0);
+        Speaker(cx + rx * .80f, cy - ry * .75f, "R", 1);
         if (CurrentLayout != SpeakerLayout.DualStereo)
-            Speaker(cx, cy - ry, "Center");
+            Speaker(cx, cy - ry, "Center", 2);
         if (CurrentLayout == SpeakerLayout.Surround51Beta)
         {
-            Speaker(cx - rx * .69f, cy + ry * .82f, "Rear L");
-            Speaker(cx + rx * .69f, cy + ry * .82f, "Rear R");
-            Speaker(cx + rx * 1.02f, cy - ry * .12f, "LFE");
+            Speaker(cx - rx * .69f, cy + ry * .82f, "Rear L", 4);
+            Speaker(cx + rx * .69f, cy + ry * .82f, "Rear R", 5);
+            Speaker(cx + rx * 1.02f, cy - ry * .12f, "LFE", 3);
         }
         g.FillEllipse(listenerBrush, cx - 12, cy - 15, 24, 24);
         using var body = new Pen(listenerBrush, 5) { StartCap = LineCap.Round, EndCap = LineCap.Round };
@@ -322,6 +345,8 @@ internal sealed class MainForm : Form
     }
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        meterTimer.Stop();
+        meterTimer.Dispose();
         tray.Visible = false;
         tray.Dispose();
         audio.Dispose();

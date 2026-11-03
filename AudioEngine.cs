@@ -13,6 +13,12 @@ internal sealed class AudioEngine : IDisposable
     private WasapiLoopbackCapture? capture;
     private readonly object gate = new();
     private double lfeState;
+    private readonly float[] levels = new float[6];
+    // [front L, front R, center, LFE, rear L, rear R], pre-device sample peaks.
+    public float[] GetSignalPeaks()
+    {
+        lock (gate) return (float[])levels.Clone();
+    }
 
     public bool IsRunning { get; private set; }
     public string InputFormatDescription { get; private set; } = "Not running";
@@ -77,6 +83,7 @@ internal sealed class AudioEngine : IDisposable
                 int frames = e.BytesRecorded / input.BlockAlign;
                 if (frames == 0) return;
                 var buffers = new Dictionary<SpeakerRole, byte[]>();
+                var peaks = new float[6];
                 foreach (var sink in sinks) buffers[sink.Role] = new byte[frames * 8];
                 for (int frame = 0; frame < frames; frame++)
                 {
@@ -102,12 +109,17 @@ internal sealed class AudioEngine : IDisposable
                             SpeakerRole.RearStereo => (rearL, rearR),
                             _ => (0, 0)
                         };
+                        int leftIndex = role switch { SpeakerRole.FrontLeft => 0, SpeakerRole.FrontRight => 1, SpeakerRole.Center => 2, SpeakerRole.Subwoofer => 3, SpeakerRole.RearStereo => 4, _ => 0 };
+                        peaks[leftIndex] = Math.Max(peaks[leftIndex], Math.Abs(a));
+                        if (role == SpeakerRole.RearStereo) peaks[5] = Math.Max(peaks[5], Math.Abs(b));
                         Buffer.BlockCopy(BitConverter.GetBytes(Math.Clamp(a, -1f, 1f)), 0, buffer, frame * 8, 4);
                         Buffer.BlockCopy(BitConverter.GetBytes(Math.Clamp(b, -1f, 1f)), 0, buffer, frame * 8 + 4, 4);
                     }
                 }
                 lock (gate)
                 {
+                    // The UI polls at ~20 FPS; hold a short peak and smoothly decay.
+                    for (int i = 0; i < levels.Length; i++) levels[i] = Math.Max(peaks[i], levels[i] * 0.78f);
                     foreach (var sink in sinks)
                     {
                         if (sink.Buffer.BufferedDuration.TotalMilliseconds > 350) sink.Buffer.ClearBuffer();
@@ -144,6 +156,7 @@ internal sealed class AudioEngine : IDisposable
         capture?.Dispose();
         capture = null;
         InputFormatDescription = "Not running";
+        lock (gate) Array.Clear(levels, 0, levels.Length);
     }
 
     public void Dispose() { Stop(); enumerator.Dispose(); }
