@@ -14,6 +14,14 @@ internal sealed class AudioEngine : IDisposable
     private readonly object gate = new();
     private double lfeState;
     private readonly float[] levels = new float[6];
+    // Independent linear amplitude for FL, FR, FC, LFE, RL and RR.
+    private readonly float[] channelGains = [1f, 1f, 1f, 1f, 1f, 1f];
+
+    public void SetChannelGain(int channel, float gain)
+    {
+        if (channel < 0 || channel >= channelGains.Length) throw new ArgumentOutOfRangeException(nameof(channel));
+        Volatile.Write(ref channelGains[channel], Math.Clamp(gain, 0f, 1f));
+    }
     // [front L, front R, center, LFE, rear L, rear R], pre-device sample peaks.
     public float[] GetSignalPeaks()
     {
@@ -110,6 +118,8 @@ internal sealed class AudioEngine : IDisposable
                             _ => (0, 0)
                         };
                         int leftIndex = role switch { SpeakerRole.FrontLeft => 0, SpeakerRole.FrontRight => 1, SpeakerRole.Center => 2, SpeakerRole.Subwoofer => 3, SpeakerRole.RearStereo => 4, _ => 0 };
+                        a *= Volatile.Read(ref channelGains[leftIndex]);
+                        b *= Volatile.Read(ref channelGains[role == SpeakerRole.RearStereo ? 5 : leftIndex]);
                         peaks[leftIndex] = Math.Max(peaks[leftIndex], Math.Abs(a));
                         if (role == SpeakerRole.RearStereo) peaks[5] = Math.Max(peaks[5], Math.Abs(b));
                         Buffer.BlockCopy(BitConverter.GetBytes(Math.Clamp(a, -1f, 1f)), 0, buffer, frame * 8, 4);

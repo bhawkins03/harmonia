@@ -29,6 +29,7 @@ internal sealed class MainForm : Form
     {
         public SpeakerLayout Layout { get; set; } = SpeakerLayout.DualStereo;
         public Dictionary<string, Dictionary<string, string>> Assignments { get; set; } = new();
+        public Dictionary<string, int[]> ChannelVolumes { get; set; } = new();
     }
 
     private readonly AudioEngine audio = new();
@@ -37,11 +38,13 @@ internal sealed class MainForm : Form
     private readonly ComboBox layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TableLayoutPanel assignmentsPanel = new() { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
     private readonly Dictionary<SpeakerRole, string> mappedDevices = new();
+    private readonly FlowLayoutPanel gainControls = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(0, 4, 0, 4) };
+    private readonly int[] gainPercent = [100, 100, 100, 100, 100, 100];
     private readonly Dictionary<string, string> deviceNames = new();
     private readonly FlowLayoutPanel deviceTiles = new() { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = true, FlowDirection = FlowDirection.TopDown };
     private readonly Dictionary<SpeakerRole, RectangleF> dropTargets = new();
     private SpeakerRole? hoveringRole;
-    private readonly BufferedMapPanel map = new() { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 29, 42) };
+    private readonly BufferedMapPanel map = new() { Dock = DockStyle.Fill, BackColor = GalaxyTheme.Surface };
     private readonly Label status = new() { Text = "Stopped", AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Button start = new() { Text = "Start routing", Width = 130, Height = 34 };
     private readonly Button stop = new() { Text = "Stop routing", Width = 130, Height = 34, Enabled = false };
@@ -71,8 +74,8 @@ internal sealed class MainForm : Form
         Size = new Size(1000, 665);
         MinimumSize = new Size(840, 540);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(15, 19, 29);
-        ForeColor = Color.WhiteSmoke;
+        BackColor = GalaxyTheme.Background;
+        ForeColor = GalaxyTheme.Text;
         Font = new Font("Segoe UI", 10);
         Icon = SystemIcons.Application;
 
@@ -82,15 +85,16 @@ internal sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 85));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
-        var heading = new Label { Text = "HARMONIA     /     SPEAKER CONFIGURATION", Font = new Font("Segoe UI Semibold", 19), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        var heading = new Label { Text = "HARMONIA   /   YOUR SOUNDSTAGE", Font = new Font("Segoe UI Semibold", 20), ForeColor = GalaxyTheme.Text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         root.Controls.Add(heading, 0, 0);
         root.SetColumnSpan(heading, 2);
 
-        var leftSide = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(10) };
+        var leftSide = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(10), BackColor = GalaxyTheme.Background };
         var options = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 5 };
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         options.Controls.Add(new Label { Text = "SPEAKER LAYOUT", AutoSize = true, Padding = new Padding(0, 0, 0, 8), ForeColor = Color.LightSkyBlue }, 0, 0);
         layout.Items.AddRange(new object[] { "Dual monitor (stereo)", "Triple monitor (stereo + center)", "(Beta) Surround 5.1" });
+        GalaxyTheme.StyleSelect(layout);
         options.Controls.Add(layout, 0, 1);
         var note = new Label
         {
@@ -99,18 +103,22 @@ internal sealed class MainForm : Form
         };
         options.Controls.Add(note, 0, 2);
         options.Controls.Add(new Label { Text = "ASSIGN OUTPUT DEVICES", ForeColor = Color.LightSkyBlue, AutoSize = true, Padding = new Padding(0, 12, 0, 7) }, 0, 3);
-        var tilesGroup = new GroupBox { Text = "Available audio devices — drag onto map", ForeColor = Color.Gainsboro, Height = 220, Dock = DockStyle.Top };
+        var tilesGroup = new GroupBox { Text = "AUDIO DEVICES  /  DRAG TO ASSIGN", ForeColor = GalaxyTheme.Accent, BackColor = GalaxyTheme.Background, Height = 242, Dock = DockStyle.Top, Font = new Font("Segoe UI Semibold", 9.5f) };
         tilesGroup.Controls.Add(deviceTiles);
         options.Controls.Add(tilesGroup, 0, 4);
-        options.RowCount = 6;
+        options.RowCount = 7;
         options.Controls.Add(strictInput, 0, 5);
+        var gainsGroup = new GroupBox { Text = "SPEAKER VOLUME  /  INDEPENDENT", ForeColor = GalaxyTheme.Accent, BackColor = GalaxyTheme.Background, Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(8) };
+        gainsGroup.Controls.Add(gainControls);
+        options.Controls.Add(gainsGroup, 0, 6);
         leftSide.Controls.Add(options);
         root.Controls.Add(leftSide, 0, 1);
 
-        var rightSide = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
+        var rightSide = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = GalaxyTheme.Background };
         rightSide.Controls.Add(map);
         root.Controls.Add(rightSide, 1, 1);
-        var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(12) };
+        var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(12), BackColor = GalaxyTheme.Background };
+        foreach (var action in new[] { start, stop, refresh, snapshot, testRearL, testRearR }) GalaxyTheme.StyleButton(action, action == start);
         footer.Controls.Add(start);
         footer.Controls.Add(stop);
         footer.Controls.Add(refresh);
@@ -189,6 +197,7 @@ internal sealed class MainForm : Form
         if (loading) return;
         settings.Layout = CurrentLayout;
         settings.Assignments[CurrentLayout.ToString()] = mappedDevices.ToDictionary(x => x.Key.ToString(), x => x.Value);
+        settings.ChannelVolumes[CurrentLayout.ToString()] = (int[])gainPercent.Clone();
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
@@ -210,29 +219,24 @@ internal sealed class MainForm : Form
         loading = true;
         try
         {
+            var values = settings.ChannelVolumes.TryGetValue(CurrentLayout.ToString(), out var savedGains) ? savedGains : Array.Empty<int>();
+            for (int i = 0; i < gainPercent.Length; i++)
+            {
+                gainPercent[i] = i < values.Length ? Math.Clamp(values[i], 0, 100) : 100;
+                audio.SetChannelGain(i, gainPercent[i] / 100f);
+            }
+            BuildGainControls();
             deviceNames.Clear();
             deviceTiles.Controls.Clear();
             var defaultId = audio.DefaultDeviceId;
             foreach (var device in audio.GetDevices())
             {
                 deviceNames[device.Id] = device.Name;
-                var tile = new Label
-                {
-                    Text = device.Name + (device.Id == defaultId ? " (source)" : ""),
-                    Tag = device.Id,
-                    Width = 295,
-                    Height = 43,
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    BorderStyle = BorderStyle.FixedSingle,
-                    BackColor = Color.FromArgb(39, 64, 94),
-                    ForeColor = Color.WhiteSmoke,
-                    Padding = new Padding(8),
-                    Cursor = Cursors.Hand
-                };
+                var tile = new GalaxyDeviceTile(device.Id, device.Name, device.Id == defaultId);
                 tile.MouseDown += (_, e) =>
                 {
                     if (e.Button == MouseButtons.Left && !audio.IsRunning)
-                        tile.DoDragDrop((string)tile.Tag!, DragDropEffects.Move);
+                        tile.DoDragDrop(tile.DeviceId, DragDropEffects.Move);
                 };
                 deviceTiles.Controls.Add(tile);
             }
@@ -247,6 +251,41 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex) { status.Text = "Device discovery failed"; MessageBox.Show(ex.Message, "Harmonia"); }
         finally { loading = false; }
+    }
+
+    private void BuildGainControls()
+    {
+        gainControls.SuspendLayout();
+        gainControls.Controls.Clear();
+        var channels = CurrentLayout switch
+        {
+            SpeakerLayout.DualStereo => new[] { 0, 1 },
+            SpeakerLayout.TripleStereoCenter => new[] { 0, 1, 2 },
+            _ => new[] { 0, 1, 2, 3, 4, 5 }
+        };
+        string[] labels = ["Front left", "Front right", "Center", "Subwoofer (LFE)", "Rear left", "Rear right"];
+        foreach (int channel in channels)
+        {
+            var row = new TableLayoutPanel { Width = 325, Height = 52, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 2, 0, 2) };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 80));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            var caption = new Label { Text = labels[channel], AutoSize = true, ForeColor = GalaxyTheme.Text };
+            var percent = new Label { Text = gainPercent[channel] + "%", TextAlign = ContentAlignment.MiddleRight, Dock = DockStyle.Fill, ForeColor = GalaxyTheme.Muted };
+            var slider = new TrackBar { Minimum = 0, Maximum = 100, Value = gainPercent[channel], TickStyle = TickStyle.None, Dock = DockStyle.Fill, AutoSize = false, Height = 24, BackColor = GalaxyTheme.Background, AccessibleName = labels[channel] + " volume" };
+            row.Controls.Add(caption, 0, 0);
+            row.Controls.Add(percent, 1, 0);
+            row.Controls.Add(slider, 0, 1);
+            row.SetColumnSpan(slider, 2);
+            slider.ValueChanged += (_, _) =>
+            {
+                gainPercent[channel] = slider.Value;
+                percent.Text = slider.Value + "%";
+                audio.SetChannelGain(channel, slider.Value / 100f);
+                SaveSelection();
+            };
+            gainControls.Controls.Add(row);
+        }
+        gainControls.ResumeLayout();
     }
 
     private SpeakerRole? HitTestRole(Point location)
@@ -337,9 +376,9 @@ internal sealed class MainForm : Form
         using var labelFont = new Font("Segoe UI", 9);
         using var thin = new Pen(Color.FromArgb(50, 122, 146, 174), 2) { DashStyle = DashStyle.Dash };
         using var ring = new Pen(Color.FromArgb(47, 150, 174, 205), 1.5f);
-        using var speakerBrush = new SolidBrush(Color.FromArgb(58, 145, 230));
+        using var speakerBrush = new SolidBrush(GalaxyTheme.Accent);
         using var listenerBrush = new SolidBrush(Color.FromArgb(227, 235, 246));
-        g.DrawString("TOP-DOWN SPEAKER MAP — DRAG TO ASSIGN", titleFont, Brushes.WhiteSmoke, 20, 14);
+        g.DrawString("SPEAKER MAP   /   LIVE OUTPUT", titleFont, Brushes.WhiteSmoke, 20, 14);
         dropTargets.Clear();
         float cx = w / 2, cy = h / 2 + 18;
         float rx = Math.Min(w * .38f, 180), ry = Math.Min(h * .34f, 165);
@@ -364,8 +403,8 @@ internal sealed class MainForm : Form
             var width = 45f;
             var rect = new RectangleF(x - width / 2, y - 16, width, 32);
             dropTargets[role] = new RectangleF(x - 41, y - 36, 82, 78);
-            using var bg = new SolidBrush(Color.FromArgb(39, 84, 122));
-            using var border = new Pen(hoveringRole == role ? Color.Gold : mappedDevices.ContainsKey(role) ? Color.LimeGreen : Color.FromArgb(80, 171, 245), 2);
+            using var bg = new SolidBrush(GalaxyTheme.SurfaceHover);
+            using var border = new Pen(hoveringRole == role ? Color.Gold : mappedDevices.ContainsKey(role) ? Color.LimeGreen : GalaxyTheme.Accent, 2);
             g.FillRectangle(bg, rect);
             g.DrawRectangle(border, rect.X, rect.Y, rect.Width, rect.Height);
             g.FillEllipse(speakerBrush, x - 5, y - 5, 10, 10);
